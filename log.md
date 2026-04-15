@@ -208,3 +208,21 @@ Well, that's interesting. I got the `0xec` opcode, and it's not documented in th
 I couldn't find any obvious bug, so I guess it's time to add some logging.
 
 Nevermind, got it pretty quickly after adding logs -- I forgot to reset `parse_p` after `call_func`. That's much better, now I just get `Segmentation fault`. Sigh.
+
+---
+
+Time to open a debugger. Doesn't help much. Enabled ASAN, figured out `locals` was overflowing. I guess `n_locals` doesn't include arguments!
+
+It didn't help much, though -- now I'm underflowing `stack` when trying to load function arguments from stack. I wonder where that comes from.
+
+I'm confused. The function it's trying to call is `$__wasi_init_tp`, which takes no arguments, but for some reason my code thinks there's 2 arguments.
+
+```
+wasm-dis --preserve-type-order hello-world/target/wasm32-wasip1/release/hello-world.wasm >dis
+```
+
+I parse the function type as `$5`, which is indeed defined as `(func (param i32 i32) (result i32))`... but as far as I can tell, that's not the function I should be entering by control flow. Are function signatures off by any chance?
+
+> The function section has the id 3. It decodes into a vector of type indices that represent the type fields of the functions in the funcs component of a module.
+
+Right, so the function section actually only touches on defined functions, not imported functions. The function section is parsed after the import section, so I can just use the value of `n_funcs` at that point as the offset.

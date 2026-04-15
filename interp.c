@@ -269,13 +269,14 @@ void call_func(unsigned funcidx) {
         parse_p++; // valtype
     }
 
-    unsigned long this_locals[n_locals];
-    unsigned long *prev_locals = locals;
-    locals = this_locals;
-
     unsigned char *p = parse_p;
     parse_p = declared_types[func_types[funcidx]];
     unsigned n_args = read_uint();
+
+    unsigned long this_locals[n_args + n_locals];
+    unsigned long *prev_locals = locals;
+    locals = this_locals;
+
     memcpy(locals, stack_head - n_args, n_args * 8);
     stack_head -= n_args;
     parse_p = p;
@@ -324,7 +325,7 @@ int main(int argc, char **argv) {
                 printf("import %.*s\n", name_len, parse_p);
                 parse_p += name_len;
 
-                n_funcs++; // TODO: populate funcs
+                n_funcs++; // TODO: populate funcs and func_types
 
                 parse_p++; // 0x00
                 read_uint();
@@ -334,7 +335,7 @@ int main(int argc, char **argv) {
             unsigned n_sigs = read_uint();
             printf("%u function signatures\n", n_sigs);
             for (unsigned i = 0; i < n_sigs; i++) {
-                func_types[i] = read_uint();
+                func_types[n_funcs + i] = read_uint();
             }
         } else if (section_type == 6) {
             // Global section
