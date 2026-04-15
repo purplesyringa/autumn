@@ -454,3 +454,7 @@ I just found another issue: I can't easily allocate locals anymore. I used to us
 Segfaults... Segfaults as always. Now it's a stack underflow immediately after `$malloc`. For some reason `$malloc` didn't return enough data or something? I don't get it.
 
 Okay, so the issue was that I didn't handle `loop` correctly. If there was a `br` to the `loop`, I removed it from the stack and didn't add it back when reentering. That fixed it. The code has become quite ugly, but it's not too bad and hopefully it'll let me implement `if`..`else` later.
+
+---
+
+Here's another idea: I currently have two invocations of `eval_loop`, one for the start (initialization) function and one for `_start`. I could instead invoke `_start`, then before I evaluate it invoke the start function, and call `eval_loop` once. This effectively inserts a fake `(call <start function>)` at the beginning of `_start`. The reason to do this is because it allows me to unconditionally call `exit` when the caller stack empties (i.e. `p` is reset to `NULL`).

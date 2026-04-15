@@ -456,12 +456,6 @@ void call_func(unsigned funcidx) {
     };
 }
 
-void eval_loop() {
-    while (p) {
-        eval_instr();
-    }
-}
-
 void fd_write() {
     unsigned n_written = *--stack_head;
     unsigned iovs_len = *--stack_head;
@@ -642,10 +636,11 @@ int main(int argc, char **argv) {
     }
 
     p = NULL;
+    call_func(main_funcidx);
     if (start_funcidx != (unsigned)-1) {
         call_func(start_funcidx);
-        eval_loop();
     }
-    call_func(main_funcidx);
-    eval_loop();
+    while (p) {
+        eval_instr();
+    }
 }
