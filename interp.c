@@ -6,7 +6,7 @@
 #include <unistd.h>
 
 unsigned char module_bytes[1024 * 1024];
-unsigned char *p;
+register unsigned char *p asm ("r12");
 
 int memcmp(const void *, const void *, size_t);
 
@@ -39,15 +39,18 @@ static long syscall3(long sysno, long a, long b, long c) {
     return sysno;
 }
 
+__attribute__((noinline))
 static unsigned long impl_read_int(_Bool is_signed) {
-    int shift = 0;
+    int shift = 64;
     unsigned long out = 0;
     do {
-        out |= (unsigned long)(*p & 0x7f) << shift;
-        shift += 7;
+        out = (out >> 7) | ((unsigned long)(*p & 0x7f) << (64 - 7));
+        shift -= 7;
     } while (*p++ & 0x80);
-    if (is_signed && shift < 64) {
-        out = (long)(out << (64 - shift)) >> (64 - shift);
+    if (is_signed) {
+        out = (long)out >> shift;
+    } else {
+        out >>= shift;
     }
     return out;
 }

@@ -561,3 +561,17 @@ Looked at the disassembly again and found more `nop`s. Realized I didn't enable 
 ---
 
 There's an issue with `memcpy`/`memmove`. Since they use inline assembly, GCC cannot infer that `memcpy(dst, src, 4)` is equivalent to a manual 4-byte copy. But if I use `__builtin_memcpy` everywhere, it generates `call memcpy` in codegen, breaking inlining, which defeats the purpose of using `rep movsb`. So I have to use `__builtin_*` for fixed amounts and the normal version for variable amounts manually. 4928 bytes.
+
+---
+
+Simplified `impl_read_int` a little, but it didn't improve file size.
+
+I'm thinking about trying out something a bit more cursed. We use the `p` pointer all across the program, and it'd be awful useful for it to be in a register. IIRC, GCC has some option to do that.
+
+Here: https://gcc.gnu.org/onlinedocs/gcc/Global-Register-Variables.html
+
+4720 bytes after adding
+
+```c
+register unsigned char *p asm ("r12");
+```
