@@ -91,6 +91,19 @@ void eval_instr() {
         }
         break;
     }
+    case 0x0e: {
+        // br_table
+        unsigned n_labels = read_uint();
+        unsigned jump_table[n_labels];
+        for (unsigned i = 0; i < n_labels; i++) {
+            jump_table[i] = read_uint();
+        }
+        unsigned otherwise = read_uint();
+        PARSED;
+        unsigned i = *--stack_head;
+        broken_blocks = i < n_labels ? jump_table[i] : otherwise;
+        break;
+    }
     case 0x0f: {
         // return
         PARSED;
@@ -209,6 +222,20 @@ void eval_instr() {
         PARSED;
         unsigned long b = *--stack_head;
         stack_head[-1] = (unsigned)(stack_head[-1] - b);
+        break;
+    }
+    case 0x80: {
+        // i64.div_u
+        PARSED;
+        unsigned long b = *--stack_head;
+        stack_head[-1] /= b;
+        break;
+    }
+    case 0x81: {
+        // i64.rem_s
+        PARSED;
+        long b = *--stack_head;
+        stack_head[-1] = (long)stack_head[-1] % b;
         break;
     }
     case 0x99: {

@@ -195,3 +195,8 @@ Got to `i32.load8_u`. What does that even mean? I think it's `movzbl`, but other
 
 Though the next one is pretty close -- it's `i32.eq`, whereas I already implemented `i32.ne` and, in fact, some other comparisons.
 
+---
+
+Got to `br_table`. It doesn't refer to the function table, it's just an inline jump table. I guess that makes sense...
+
+Implemented `i64.rem_s` and promptly got SIGFPE because I forgot `PARSED`. Fun.
