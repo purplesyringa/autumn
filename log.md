@@ -426,3 +426,7 @@ This is `call_indirect` followed an overlong encoding of the number `1` for `typ
 Is it due to relocations? I could imagine `call_indirect` being used to link different modules. And since modules might have different tables, you might want to change the tables and the memory... so it leaves fixed space for that? Wow.
 
 So apparently we're simply not allowed to skip uints that are documented to be exactly `0x00` in the Wasm 1.0 spec, because the Wasm 3.0 spec makes them variable and thus possibly overlong. It's a little too late to make this change everywhere, but I can at least fix it in `call_indirect`.
+
+---
+
+Great, more instructions outside of Wasm 1.0. `i32.extend8_s` this time. A few instructions later we finally have a complete "Hello, world!". It's beautiful.

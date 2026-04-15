@@ -193,6 +193,7 @@ void eval_instr() {
     case 0x28: // i32.load
     case 0x29: // i64.load
     case 0x2d: // i32.load8_u
+    case 0x2f: // i32.load16_u
     {
         read_uint(); // align
         unsigned offset = read_uint();
@@ -203,6 +204,7 @@ void eval_instr() {
             opcode == 0x28 ? 4 :
             opcode == 0x29 ? 8 :
             opcode == 0x2d ? 1 :
+            opcode == 0x2f ? 2 :
             -1U
         );
         memcpy(&value, memory + address, len);
@@ -294,6 +296,8 @@ void eval_instr() {
     case 0x80: // i64.div_u
     case 0x81: // i64.rem_s
     case 0x83: // i64.and
+    case 0x84: // i64.or
+    case 0x86: // i64.shl
     {
         PARSED;
         unsigned long b = *--stack_head;
@@ -302,7 +306,7 @@ void eval_instr() {
             opcode == 0x6a ? (unsigned)(a + b) :
             opcode == 0x6b ? (unsigned)(a - b) :
             opcode == 0x71 || opcode == 0x83 ? a & b :
-            opcode == 0x72 ? a | b :
+            opcode == 0x72 || opcode == 0x84 ? a | b :
             opcode == 0x73 ? a ^ b :
             opcode == 0x74 ? (unsigned)a << (b % 32) :
             opcode == 0x76 ? a >> (b % 32) :
@@ -310,6 +314,7 @@ void eval_instr() {
             opcode == 0x7c ? a + b :
             opcode == 0x80 ? a / b :
             opcode == 0x81 ? (unsigned long)((long)a % (long)b) :
+            opcode == 0x86 ? a << (b % 64) :
             0
         );
         stack_head[-1] = value;
@@ -318,6 +323,14 @@ void eval_instr() {
     case 0x99: // f64.abs
         PARSED;
         stack_head[-1] = stack_head[-1] & ((-1ULL) >> 1);
+        break;
+    case 0xad: // i64.extend_i32_u
+        PARSED;
+        stack_head[-1] = (unsigned)stack_head[-1];
+        break;
+    case 0xc0: // i32.extend8_s
+        PARSED;
+        stack_head[-1] = (unsigned long)(int)(char)stack_head[-1];
         break;
     case 0xfc:
         opcode = *p++;
