@@ -344,3 +344,32 @@ It's a bit unwieldy, so let's first try implementing the function that's actuall
 ...and returns `errno`. Not quite Linux-like, but okay.
 
 Can I implement this with `writev`? Surely the ABI is compatible? Okay, no, probably not due to 64-bit vs 32-bit pointers. Unfortunate.
+
+---
+
+Got an error written by `fd_write`:
+
+```
+fatal runtime error: rwlock locked for writing, aborting
+```
+
+So where does that come from? The trace is
+
+```
+$__wasi_fd_write
+$_RNvXs9_NtNtCsTnEDepTwQh_3std2io5implsINtNtCsc9qWavMCQxu_5alloc3vec3VechENtB7_5Write9write_allB9_
+$_RNvXNvNtCsTnEDepTwQh_3std2io17default_write_fmtINtB2_7AdapterNtNtNtNtB6_3sys5stdio4unix6StderrENtNtCshbByS147RDD_4core3fmt5Write9write_strB6_
+$_RNvNtCshbByS147RDD_4core3fmt5write
+$_RNvYNtNtNtNtCsTnEDepTwQh_3std3sys5stdio4unix6StderrNtNtBa_2io5Write9write_fmtBa_
+$_RNvNtCsTnEDepTwQh_3std9panicking15panic_with_hook
+$_RNCNvNtCsTnEDepTwQh_3std9panicking13panic_handler0B5_
+$_RNvNtCshbByS147RDD_4core9panicking9panic_fmt
+$_RNvNvMNtNtCsTnEDepTwQh_3std6thread2idNtB4_8ThreadId3new9exhausted
+$_RNvNtCsTnEDepTwQh_3std2rt19lang_start_internal
+```
+
+...so I'm somehow already reaching `exhausted` in the same `ThreadId::new` function. Is it an arithmetic bug this time? I'm confused because I could *swear* I reached `call_indirect`. Or was it from the panic machinery instead of `main`? I guess so. Fun.
+
+Okay, so apparently I was misunderstanding how `loop` works. There's a `br_if` at the end of this `loop`, and apparently that's how the loop is `continue`d, but I think fallthrough should be equivalent to `break`, not `continue`:
+
+> This semantics also applies to the instruction sequence contained in a loop instruction. Therefore, execution of a loop falls off the end, unless a backwards branch is performed explicitly.

@@ -44,6 +44,9 @@ void eval_instr() {
 #define PARSED if (broken_blocks) break
 
     unsigned char opcode = *p++;
+    // if (broken_blocks == 0) {
+    //     printf("opcode 0x%02x\n", opcode);
+    // }
     switch (opcode) {
     case 0x00:
         // unreachable
@@ -68,8 +71,7 @@ void eval_instr() {
         do {
             p = saved_p;
             eval_until(0x0b);
-            broken_blocks -= executed && broken_blocks > 0;
-        } while (broken_blocks == 0);
+        } while (executed && broken_blocks > 0 && --broken_blocks == 0);
         break;
     }
     case 0x04: {
@@ -92,6 +94,7 @@ void eval_instr() {
         // br_if
         unsigned labelidx = read_uint();
         PARSED;
+        // printf("br_if with condition %lu\n", stack_head[-1]);
         if (*--stack_head) {
             broken_blocks = labelidx + 1;
         }
@@ -137,6 +140,7 @@ void eval_instr() {
         PARSED;
         unsigned long cond = *--stack_head;
         unsigned long b = *--stack_head;
+        // printf("select with condition %lu\n", cond);
         stack_head[-1] = cond ? stack_head[-1] : b;
         break;
     }
