@@ -123,11 +123,9 @@ void eval_instr() {
         break;
     }
     case 0x0f: // return
-    {
         PARSED;
         broken_blocks = -1U;
         break;
-    }
     case 0x10: // call
     {
         unsigned funcidx = read_uint();
@@ -145,11 +143,9 @@ void eval_instr() {
         break;
     }
     case 0x1a: // drop
-    {
         PARSED;
         stack_head--;
         break;
-    }
     case 0x1b: // select
     {
         PARSED;
@@ -319,17 +315,15 @@ void eval_instr() {
         break;
     }
     case 0x99: // f64.abs
-    {
         PARSED;
         stack_head[-1] = stack_head[-1] & ((-1ULL) >> 1);
         break;
-    }
     case 0xfc:
-    {
         opcode = *p++;
         switch (opcode) {
         case 0x0a: // memory.copy
         {
+            p += 2; // memidx x2
             PARSED;
             unsigned n = *--stack_head;
             unsigned src = *--stack_head;
@@ -342,7 +336,6 @@ void eval_instr() {
             __builtin_trap();
         }
         break;
-    }
     default:
         printf("Unknown opcode 0x%02x\n", opcode);
         __builtin_trap();
