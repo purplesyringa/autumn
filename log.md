@@ -377,3 +377,30 @@ Okay, so apparently I was misunderstanding how `loop` works. There's a `br_if` a
 ---
 
 More instructions. `i32.ctz` is a fun one. Who could possibly need it in a hello-world? Oh, right, an allocator.
+
+---
+
+Another sanitizer failure. This time it's a memory access -- `0x204064` is clearly out of bounds for our 2 MiB memory. There are many other odd accesses before it, generally steadily increasing.
+
+All the accesses come from `$_RNvNtNtCshbByS147RDD_4core5slice6memchr7memrchr`. What could possibly be going on there? I'd expect `memrchr` to access memory in reverse order, but that's not what's happening here.
+
+The addresses are increasing by 127. Why??
+
+Most confusingly, the load instruction is `i32.load8_u`, not the SWARed path.
+
+Wait, I have an idea. Here's one part of the loop:
+
+```wast
+(local.set $6
+ (i32.add
+  (local.get $6)
+  (i32.const -1)
+ )
+)
+```
+
+It's trying to add `-1`, but it's supposedly adding 127. Which is exactly how -1 would be represented as a 7-bit signed number. Do I perhaps misunderstood how LEB128 is applied to `iN` types?
+
+> Uninterpreted integers are encoded as signed integers.
+
+I could swear it was unsigned integers. That makes more sense and makes everything so much more confusing. How did it even work until now??

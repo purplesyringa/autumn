@@ -8,14 +8,25 @@
 unsigned char module_bytes[1024 * 1024];
 unsigned char *p;
 
-unsigned long read_uint() {
+unsigned long impl_read_int(_Bool is_signed) {
     int shift = 0;
     unsigned long out = 0;
     do {
         out |= (unsigned long)(*p & 0x7f) << shift;
         shift += 7;
     } while (*p++ & 0x80);
+    if (is_signed && shift < 64) {
+        out = (long)(out << (64 - shift)) >> (64 - shift);
+    }
     return out;
+}
+
+unsigned long read_uint() {
+    return impl_read_int(0);
+}
+
+long read_sint() {
+    return impl_read_int(1);
 }
 
 struct func_info {
@@ -225,9 +236,9 @@ void eval_instr() {
     case 0x41: // i32.const
     case 0x42: // i64.const
     {
-        unsigned long c = read_uint();
+        long c = read_sint();
         PARSED;
-        *stack_head++ = c;
+        *stack_head++ = opcode == 0x41 ? (unsigned)c : c;
         break;
     }
     case 0x45: // i32.eqz
