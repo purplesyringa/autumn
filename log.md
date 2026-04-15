@@ -557,3 +557,7 @@ I tried aarch64 just in case, but it was slightly larger, at 5384 bytes. (See `a
 ---
 
 Looked at the disassembly again and found more `nop`s. Realized I didn't enable `-fno-align-loops` and similar options. 4976 bytes now. Some `nop`s are still present; not sure what the deal is there.
+
+---
+
+There's an issue with `memcpy`/`memmove`. Since they use inline assembly, GCC cannot infer that `memcpy(dst, src, 4)` is equivalent to a manual 4-byte copy. But if I use `__builtin_memcpy` everywhere, it generates `call memcpy` in codegen, breaking inlining, which defeats the purpose of using `rep movsb`. So I have to use `__builtin_*` for fixed amounts and the normal version for variable amounts manually. 4928 bytes.

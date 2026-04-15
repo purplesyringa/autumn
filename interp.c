@@ -513,7 +513,7 @@ static void fd_write() {
     if (native_out < 0) {
         wasi_out = -native_out;
     } else {
-        memcpy(memory + n_written, &native_out, 4);
+        __builtin_memcpy(memory + n_written, &native_out, 4);
         wasi_out = 0;
     }
 
@@ -593,12 +593,12 @@ int main(int argc, char **argv) {
                     break;
                 case 0x7d:
                     // f32
-                    memcpy(&globals[i], p, 4);
+                    __builtin_memcpy(&globals[i], p, 4);
                     p += 4;
                     break;
                 case 0x7c:
                     // f64
-                    memcpy(&globals[i], p, 8);
+                    __builtin_memcpy(&globals[i], p, 8);
                     p += 8;
                     break;
                 }
