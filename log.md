@@ -82,3 +82,11 @@ Okay, so `_start` is part of the WASI ABI, while the start section is effectivel
 ---
 
 Element section. It's basically an initializer list for tables. When are tables used? Looks like the (sole) function table is only used for `call_indirect`. So function pointers are indices into the table, I guess. It kinda sucks that it doesn't just use `funcidx` directly, but I guess it makes some sense.
+
+---
+
+Finally, code section! I won't parse code itself yet, though, since there's a `size` field to skip over function bodies. I'll just save pointers for now.
+
+Next is the data section. It's basically initializers for memory, as far as I can tell. I'm surprised that `wasm-dis` shows it at the top of the file, rather than at the bottom where it should be... but whatever.
+
+I'm a little surprised that the offsets are as large as 1 MiB, when the memory size is 17 pages. Wait, how large are pages again? It's 64 KiB, larger than I expected. Huh. Well, let's just hard-code 2 MiB for now.

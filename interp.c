@@ -21,6 +21,8 @@ unsigned long globals[1024];
 unsigned main_funcidx;
 unsigned start_funcidx = -1;
 unsigned long func_table[1024];
+unsigned char* funcs[1024];
+unsigned char memory[2 * 1024 * 1024];
 
 int main(int argc, char **argv) {
     int fd = open(argv[1], O_RDONLY);
@@ -121,6 +123,31 @@ int main(int argc, char **argv) {
                 while (n_funcidxs--) {
                     func_table[offset++] = read_uint();
                 }
+            }
+        } else if (section_type == 10) {
+            // Code section
+            unsigned n_codes = read_uint();
+            printf("%u codes\n", n_codes);
+
+            for (unsigned i = 0; i < n_codes; i++) {
+                unsigned int size = read_uint();
+                funcs[i] = parse_p;
+                parse_p += size;
+            }
+        } else if (section_type == 11) {
+            // Data section
+            unsigned n_datas = read_uint();
+            printf("%u datas\n", n_datas);
+
+            for (unsigned i = 0; i < n_datas; i++) {
+                parse_p++; // 0x00 memidx
+                parse_p++; // i32.const
+                unsigned offset = read_uint();
+                parse_p++; // end
+                unsigned len = read_uint();
+                printf("%u..%u bytes\n", offset, offset + len);
+                memcpy(memory + offset, parse_p, len);
+                parse_p += len;
             }
         } else {
             parse_p += byte_len;
