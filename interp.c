@@ -22,7 +22,14 @@ unsigned main_funcidx;
 unsigned start_funcidx = -1;
 unsigned long func_table[1024];
 unsigned char* funcs[1024];
+unsigned n_funcs;
 unsigned char memory[2 * 1024 * 1024];
+unsigned long stack[1024];
+unsigned stack_len;
+
+void call_func(unsigned funcidx) {
+
+}
 
 int main(int argc, char **argv) {
     int fd = open(argv[1], O_RDONLY);
@@ -51,13 +58,15 @@ int main(int argc, char **argv) {
             unsigned n_imports = read_uint();
             printf("%u imports\n", n_imports);
 
-            for (unsigned i = 0; i < n_imports; i++) {
+            while (n_imports--) {
                 unsigned mod_len = read_uint();
                 parse_p += mod_len;
 
                 unsigned name_len = read_uint();
                 printf("import %.*s\n", name_len, parse_p);
                 parse_p += name_len;
+
+                n_funcs++; // TODO: populate funcs
 
                 parse_p++; // 0x00
                 read_uint();
@@ -129,9 +138,9 @@ int main(int argc, char **argv) {
             unsigned n_codes = read_uint();
             printf("%u codes\n", n_codes);
 
-            for (unsigned i = 0; i < n_codes; i++) {
+            while (n_codes--) {
                 unsigned int size = read_uint();
-                funcs[i] = parse_p;
+                funcs[n_funcs++] = parse_p;
                 parse_p += size;
             }
         } else if (section_type == 11) {
@@ -153,4 +162,9 @@ int main(int argc, char **argv) {
             parse_p += byte_len;
         }
     }
+
+    if (start_funcidx != -1) {
+        call_func(start_funcidx);
+    }
+    call_func(main_funcidx);
 }

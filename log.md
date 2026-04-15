@@ -90,3 +90,27 @@ Finally, code section! I won't parse code itself yet, though, since there's a `s
 Next is the data section. It's basically initializers for memory, as far as I can tell. I'm surprised that `wasm-dis` shows it at the top of the file, rather than at the bottom where it should be... but whatever.
 
 I'm a little surprised that the offsets are as large as 1 MiB, when the memory size is 17 pages. Wait, how large are pages again? It's 64 KiB, larger than I expected. Huh. Well, let's just hard-code 2 MiB for now.
+
+---
+
+This leaves custom sections. My file has 3 custom sections, but wast lists only two. The unlisted one is large, so I guess that's symbols? The remaining two sections are "producers" (probably LLVM version and stuff) and the features section. It's not documented in Wasm 1.0, and nor is it documented in Wasm 3.0, but there's this: https://github.com/WebAssembly/tool-conventions/blob/main/Linking.md#target-features-section.
+
+I don't really need to parse it, I can just crash if an instruction is unimplemented. But it's useful to know which features I need to support in the first place:
+
+```
+;; features section: mutable-globals, nontrapping-float-to-int, bulk-memory, sign-ext, reference-types, multivalue, extended-const, bulk-memory-opt, call-indirect-overlong
+```
+
+---
+
+So I guess it's time to start interpreting code. Scary!
+
+I don't think we need per-frame stacks. We can just use a single stack. The calls remain a little ugly, since we need to load data from the stack to locals, but e.g. returns don't need to touch anything at all. Looks fine to me.
+
+The stack should probably just be a list of `u64`s, reinterpreted as necessary. I wonder if it's better for the stack to grow upwards or downwards... probably upwards -- as far as I can tell, `(i32.const 1) (i32.const 2) (call $f)` uses `1` as the first argument and `2` as the second one, so it's better if we can just `memcpy` the top of the stack to locals.
+
+Hmm, I just realized: how do Wasm programs invoke external functions? I probably interprted `funcidx`s wrong somewhere.
+
+> The index space for functions, tables, memories and globals includes respective imports declared in the same module. The indices of these imports precede the indices of other definitions in the same index space.
+
+Yeah, it should use continuous numbering.
