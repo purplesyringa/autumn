@@ -496,3 +496,54 @@ There's a suspicious discrepancy -- the sizes reported by `nm` sum up to 5000, s
 Man, that's a lot of stuff to reimplement. It's not *that* much, it's really just `memcpy`, `memmove`, `syscall`, and `_start`. But `syscall` has to be a macro, and that gets ugly. Just take a look at `musl`'s `syscall`. I guess I can just implement `syscall` for specific sizes.
 
 Implementing `_start` correctly requires reading the Linux ABI stack: https://articles.manugarg.com/aboutelfauxiliaryvectors (though this post assumes a 32-bit architecture).
+
+---
+
+Now `size interp-small` reports 5203 bytes, which is close enough, especially since I reimplemented a small part of libc. What I don't get is why the ELF itself is still so large. Section headers, I guess?
+
+```
+strip --strip-section-headers $@
+```
+
+Also added `-fno-asynchronous-unwind-tables`. The file is now 12 KiB down from 16 KiB.
+
+I remember using some ELF explorer to see what takes space -- can't find it now, unfortunately.
+
+What I can do is use `xxd`. There's a whole lot of zero bytes. I think I can just ask the linker to reduce section alignment. Added `-Wl,-n`, now it's 9.5 KiB -- much better. There's still some zeroes, though...
+
+I don't get it. Here are the sections:
+
+```
+  [ 0]                   NULL             0000000000000000  00000000
+       0000000000000000  0000000000000000           0     0     0
+  [ 1] .note.gnu.bu[...] NOTE             0000000000400158  00000158
+       0000000000000024  0000000000000000   A       0     0     4
+  [ 2] .text             PROGBITS         0000000000400180  00000180
+       000000000000118f  0000000000000000  AX       0     0     32
+  [ 3] .rodata           PROGBITS         0000000000401310  00001310
+       00000000000001b8  0000000000000000   A       0     0     16
+  [ 4] .note.gnu.pr[...] NOTE             00000000004014c8  000014c8
+       0000000000000030  0000000000000000   A       0     0     8
+  [ 5] .data             PROGBITS         00000000004024f8  000024f8
+       0000000000000020  0000000000000000  WA       0     0     8
+  [ 6] .bss              NOBITS           0000000000402520  00002518
+       0000000000314080  0000000000000000  WA       0     0     32
+  [ 7] .comment          PROGBITS         0000000000000000  00002518
+       000000000000001b  0000000000000001  MS       0     0     1
+  [ 8] .symtab           SYMTAB           0000000000000000  00002538
+       00000000000002d0  0000000000000018           9     8     8
+  [ 9] .strtab           STRTAB           0000000000000000  00002808
+       0000000000000102  0000000000000000           0     0     1
+  [10] .shstrtab         STRTAB           0000000000000000  0000290a
+       0000000000000063  0000000000000000           0     0     1
+```
+
+There's a lot of empty space between `.note.gnu.pr[...]` and `.data`, but the note section itself is small.
+
+Maybe this is the explorer? https://github.com/rbakbashev/elfcat Yup, that's it. But that doesn't explain why there are zeros. It's not even aligned... it's just exactly 4096 zero bytes. Where could they possibly come from?
+
+Okay, let's try something different. Let's just write a linker script. I'm sure I have a template lying around.
+
+Found one in sunwalker-box. Tried to write it myself by hand for a minute but got SIGSEGV when trying to run the ELF. I always forget the `. = 0x400000` line -- the kernel treats that as an absolute address and refuses to map anything at address 0, and without this line the default is `. = 0`.
+
+5200 bytes exactly. `elfcat` is much more pretty now -- it's just a single ELF segment. And I can still use the normal `interp` build for debugging and `nm`/`size`.
