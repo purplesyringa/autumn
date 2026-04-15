@@ -182,3 +182,9 @@ Added a few more instrs (instr is short for instruction), stumbled upon `call` a
 ---
 
 Got to `call` and realized that, since I need to transfer arguments from the stack to locals, I do need to parse the function section, since the code section doesn't contain signatures. Also realized I forgot `-Wextra`.
+
+---
+
+Implementing more instructions. Stumbled across `f64.abs`. I have a feeling some of the floating-point instructions are going to be nasty... Though `fnn.abs` in particular is luckily trivial.
+
+Implemented `if..end` (without `else`), it was pretty weird. Not as weird as `return`, though. I think the best way to implement `return` is to treat it as an infinite `br`, and reset `broken_blocks` to `0` at the end of the function. I think `-1U` works; I don't think I ever need to increment `broken_blocks` if it's already `> 0`, and using `-1` saves on code space.

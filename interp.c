@@ -27,6 +27,7 @@ unsigned func_types[1024];
 unsigned char memory[2 * 1024 * 1024];
 unsigned long stack[1024];
 unsigned long* stack_head = stack;
+unsigned long* locals;
 
 unsigned broken_blocks;
 
@@ -65,6 +66,22 @@ void eval_instr() {
         } while (broken_blocks == 0);
         break;
     }
+    case 0x04: {
+        // if..end
+        parse_p++; // blocktype
+        _Bool executed = broken_blocks == 0;
+        broken_blocks += executed && *--stack_head;
+        eval_until(0x0b);
+        broken_blocks -= executed && broken_blocks > 0;
+        break;
+    }
+    case 0x0c: {
+        // br
+        unsigned labelidx = read_uint();
+        PARSED;
+        broken_blocks = labelidx + 1;
+        break;
+    }
     case 0x0d: {
         // br_if
         unsigned labelidx = read_uint();
@@ -74,11 +91,45 @@ void eval_instr() {
         }
         break;
     }
+    case 0x0f: {
+        // return
+        PARSED;
+        broken_blocks = -1U;
+        break;
+    }
     case 0x10: {
         // call
         unsigned funcidx = read_uint();
         PARSED;
         call_func(funcidx);
+        break;
+    }
+    case 0x1b: {
+        PARSED;
+        unsigned long b = *--stack_head;
+        unsigned long a = *--stack_head;
+        stack_head[-1] = stack_head[-1] ? a : b;
+        break;
+    }
+    case 0x20: {
+        // local.get
+        unsigned localidx = read_uint();
+        PARSED;
+        *stack_head++ = locals[localidx];
+        break;
+    }
+    case 0x21: {
+        // local.set
+        unsigned localidx = read_uint();
+        PARSED;
+        locals[localidx] = *--stack_head;
+        break;
+    }
+    case 0x22: {
+        // local.tee
+        unsigned localidx = read_uint();
+        PARSED;
+        locals[localidx] = stack_head[-1];
         break;
     }
     case 0x23: {
@@ -116,11 +167,51 @@ void eval_instr() {
         *stack_head++ = c;
         break;
     }
+    case 0x45: {
+        // i32.eqz
+        PARSED;
+        stack_head[-1] = stack_head[-1] == 0;
+        break;
+    }
+    case 0x47: {
+        // i32.ne
+        PARSED;
+        unsigned long b = *--stack_head;
+        stack_head[-1] = stack_head[-1] != b;
+        break;
+    }
+    case 0x49: {
+        // i32.lt_u
+        PARSED;
+        unsigned long b = *--stack_head;
+        stack_head[-1] = stack_head[-1] < b;
+        break;
+    }
+    case 0x4b: {
+        // i32.gt_u
+        PARSED;
+        unsigned long b = *--stack_head;
+        stack_head[-1] = stack_head[-1] > b;
+        break;
+    }
     case 0x6a: {
         // i32.add
         PARSED;
         unsigned long b = *--stack_head;
         stack_head[-1] = (unsigned)(stack_head[-1] + b);
+        break;
+    }
+    case 0x6b: {
+        // i32.sub
+        PARSED;
+        unsigned long b = *--stack_head;
+        stack_head[-1] = (unsigned)(stack_head[-1] - b);
+        break;
+    }
+    case 0x99: {
+        // f64.abs
+        PARSED;
+        stack_head[-1] = stack_head[-1] & ((-1ULL) >> 1);
         break;
     }
     default:
@@ -146,7 +237,9 @@ void call_func(unsigned funcidx) {
         parse_p++; // valtype
     }
 
-    unsigned long locals[n_locals];
+    unsigned long this_locals[n_locals];
+    unsigned long *prev_locals = locals;
+    locals = this_locals;
 
     unsigned char *p = parse_p;
     parse_p = declared_types[func_types[funcidx]];
@@ -156,6 +249,9 @@ void call_func(unsigned funcidx) {
     parse_p = p;
 
     eval_until(0x0b);
+    broken_blocks = 0;
+
+    locals = prev_locals;
 }
 
 int main(int argc, char **argv) {
