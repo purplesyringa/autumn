@@ -15,6 +15,8 @@ unsigned long read_uint() {
     return out;
 }
 
+unsigned char* declared_types[1024];
+
 int main(int argc, char **argv) {
     int fd = open(argv[1], O_RDONLY);
     int len = read(fd, module_bytes, sizeof(module_bytes));
@@ -22,8 +24,23 @@ int main(int argc, char **argv) {
     parse_p = module_bytes + 8;
     while (parse_p != module_bytes + len) {
         unsigned char section_type = *parse_p++;
-        printf("section of type %d\n", section_type);
-        unsigned len = read_uint();
-        parse_p += len;
+        unsigned byte_len = read_uint();
+        printf("section of type %d of length %u\n", section_type, byte_len);
+
+        if (section_type == 1) {
+            // Type section
+            unsigned n_functypes = read_uint();
+            printf("%u types\n", n_functypes);
+            for (unsigned i = 0; i < n_functypes; i++) {
+                parse_p++; // 0x60
+                declared_types[i] = parse_p;
+                for (int j = 0; j < 2; j++) {
+                    unsigned n_valtypes = read_uint();
+                    parse_p += n_valtypes; // valtype is single-byte
+                }
+            }
+        } else {
+            parse_p += byte_len;
+        }
     }
 }

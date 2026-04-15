@@ -25,3 +25,30 @@ This feels reasonable. I think I can implement this.
 I'm going to read the file from `argv[1]`. I'm already thinking about syscalls. I could `open` + `read`, but I wouldn't know how much data to read, so I wouldn't know how much memory to allocate. I guess I could just make a large static allocation and use the return value of `read` as the size (modules are not null-terminated or anything).
 
 Looking at the docs, parsing sections already requires parsing `u32`, which is a LEB128 varint. The good news is that it uses the same format for all data types (at least unsigned ones), so I can use a single `read_uint` function. The bad news is that it's a function call and not just a memory access.
+
+---
+
+Looks like wasm promises that we'll encounter sections in a specific order. That simplifies parsing, so that's cool.
+
+Let me open wast side-by-side:
+
+```
+wasm-dis hello-world/target/wasm32-wasip1/release/hello-world.wasm >dis
+subl dis
+```
+
+The type section looks pretty important. I'm getting a little confused by the recursive type/subtype dichotomy. I don't quite get the recursive part -- the text syntax doesn't seem to allow types to refer to each other.
+
+Side note: I tried to search for `typeidx` because I saw it in the docs but didn't find matches. One Ctrl-C/Ctrl-V later, I got `𝚝𝚢𝚙𝚎𝚒𝚍𝚡`. So they're using Unicode instead of styling. Wow.
+
+https://stackoverflow.com/questions/77472803/how-to-understand-the-recursive-types-in-wasm
+
+Okay, I'm starting to piece it together. Looking at `typeuse`, it's used for heap types, tag types, and external types. Okay. I'm thinking I'll just skip over parsing types for now, simply saving pointers to a global `typeidx`-indexed array. We'll get to it later.
+
+Okay, even skipping types is non-trivial because they're complex. I just got to `heaptype` and I don't know what to do about it. Its production rule is `heaptype ::= absheaptype | s33`, and I don't see how the two can be disambiguated. Oh, wait, now I see -- the `s33` is documented to be `>= 0`, and all the bytes valid for `absheaptype` would correspond to negative integers. I guess, eugh.
+
+But do I even need to implement heap types? Isn't that outside of the original wasm specification?
+
+> Reference types classify values that are first-class references to objects in the runtime store.
+
+This reads like Wasm GC. https://github.com/WebAssembly/reference-types Here's Wasm 1.0: https://www.w3.org/TR/wasm-core-1/ Okay, yeah, that looks SO much simpler. For example, the type section is said to contain a list of `functype`s, not any other types. I don't know if Rust still supports Wasm 1.0, but I only see `functype`s in the wast anyway, so probably?
