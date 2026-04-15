@@ -324,6 +324,25 @@ void eval_instr() {
         stack_head[-1] = stack_head[-1] & ((-1ULL) >> 1);
         break;
     }
+    case 0xfc:
+    {
+        opcode = *p++;
+        switch (opcode) {
+        case 0x0a: // memory.copy
+        {
+            PARSED;
+            unsigned n = *--stack_head;
+            unsigned src = *--stack_head;
+            unsigned dst = *--stack_head;
+            memmove(memory + dst, memory + src, n);
+            break;
+        }
+        default:
+            printf("Unknown opcode 0xfc 0x%02x\n", opcode);
+            __builtin_trap();
+        }
+        break;
+    }
     default:
         printf("Unknown opcode 0x%02x\n", opcode);
         __builtin_trap();

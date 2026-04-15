@@ -404,3 +404,7 @@ It's trying to add `-1`, but it's supposedly adding 127. Which is exactly how -1
 > Uninterpreted integers are encoded as signed integers.
 
 I could swear it was unsigned integers. That makes more sense and makes everything so much more confusing. How did it even work until now??
+
+---
+
+Now I get an undocumented `0xfc` opcode. This one's present in the Wasm 3.0 spec, though. Turns out it's a prefix. Must be a `memory.*` opcode -- the features listed `bulk-memory`, that's what it probably is. Yup, it's `memory.copy`, i.e. just `memmove`.
