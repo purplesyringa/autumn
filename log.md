@@ -430,3 +430,27 @@ So apparently we're simply not allowed to skip uints that are documented to be e
 ---
 
 Great, more instructions outside of Wasm 1.0. `i32.extend8_s` this time. A few instructions later we finally have a complete "Hello, world!". It's beautiful.
+
+---
+
+Okay, now for optimization. I'd love to simulate the Wasm stack with the native one, but to free the native stack, I need to make the core interpreter non-recursive. It currently mainly uses recursion to handle blocks.
+
+Here's the plan: save the block/function frame info to a separate manual stack that is accessed much more rarely (and thus requires less code), and then make `0x0b` (`end`) a real instruction that jumps somewhere or updates globals depending on that stack, instead of just a terminator. Perhaps I should look at how labels are explained in the Wasm spec for inspiration.
+
+Sidenote: my parse/eval mechanism based on a global `broken_blocks` flag reminds me very much of Forth.
+
+Say `eval_until` tries to becomes a tail call. What do I usually do after it, which prevents this?
+
+- In `block` and `if`, I do `break_level -= executed && break_level > 0` after it and then continue evaluating intrs as usual.
+- In `loop`, I check if `executed && break_level > 0 && --break_level == 0` and reset `p` if so, then continue as usual.
+- In function invocation, I reset `break_level` and some other properties and then continue as usual.
+
+So what I'm thinking is that this small tail (a variant ID, together with teh saved parameters) should just be stored on the manual stack and evaluated by hand as necessary.
+
+...except: function calls will have to reverse arguments, since x86's stack grows downwards. Hopefully that's fine and doesn't end up being too long?
+
+I just found another issue: I can't easily allocate locals anymore. I used to use the native stack for that with what is effectively just `alloca`. Now I use the native stack for the Wasm stack, and I want the Wasm stack to be shared between functions invocations without allocations in-between (due to return values), so I need to allocate locals elsewhere.
+
+Segfaults... Segfaults as always. Now it's a stack underflow immediately after `$malloc`. For some reason `$malloc` didn't return enough data or something? I don't get it.
+
+Okay, so the issue was that I didn't handle `loop` correctly. If there was a `br` to the `loop`, I removed it from the stack and didn't add it back when reentering. That fixed it. The code has become quite ugly, but it's not too bad and hopefully it'll let me implement `if`..`else` later.

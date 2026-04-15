@@ -34,7 +34,7 @@ struct func_info {
     unsigned typeidx;
 };
 
-unsigned char* declared_types[1024];
+unsigned char *declared_types[1024];
 unsigned long globals[1024];
 unsigned main_funcidx;
 unsigned start_funcidx = -1;
@@ -43,20 +43,46 @@ struct func_info funcs[1024];
 unsigned n_funcs;
 unsigned char memory[2 * 1024 * 1024];
 unsigned long stack[1024];
-unsigned long* stack_head = stack;
-unsigned long* locals;
+unsigned long *stack_head = stack;
+unsigned long locals_stack[1024];
+unsigned long *locals = locals_stack + sizeof(locals_stack) / sizeof(locals_stack[0]);
 
-unsigned broken_blocks;
+enum caller_info_variant {
+    BLOCK_OR_IF,
+    LOOP,
+    FUNC,
+};
+union caller_info {
+    enum caller_info_variant variant;
+    struct {
+        enum caller_info_variant variant;
+        _Bool executed;
+    } block_or_if;
+    struct {
+        enum caller_info_variant variant;
+        _Bool executed;
+        unsigned char *saved_p;
+    } loop;
+    struct {
+        enum caller_info_variant variant;
+        unsigned long *saved_locals;
+        unsigned char *saved_p;
+    } func;
+};
+union caller_info caller_stack[1024];
+union caller_info *caller_stack_head = caller_stack;
+unsigned break_level;
 
-void eval_until(unsigned char terminator);
 void call_func(unsigned funcidx);
 
 void eval_instr() {
-#define PARSED if (broken_blocks) break
+#define PARSED if (break_level) break
 
     unsigned char opcode = *p++;
-    // if (broken_blocks == 0) {
+    // if (break_level == 0) {
     //     printf("opcode 0x%02x\n", opcode);
+    // } else {
+    //     printf("skip 0x%02x\n", opcode);
     // }
     switch (opcode) {
     case 0x00: // unreachable
@@ -67,36 +93,71 @@ void eval_instr() {
     case 0x02: // block
     {
         p++; // blocktype
-        _Bool executed = broken_blocks == 0;
-        eval_until(0x0b);
-        broken_blocks -= executed && broken_blocks > 0;
+        // printf("push block\n");
+        *caller_stack_head++ = (union caller_info) {
+            .block_or_if = {
+                .variant = BLOCK_OR_IF,
+                .executed = break_level == 0,
+            },
+        };
         break;
     }
     case 0x03: // loop
     {
         p++; // blocktype
-        unsigned char *saved_p = p;
-        _Bool executed = broken_blocks == 0;
-        do {
-            p = saved_p;
-            eval_until(0x0b);
-        } while (executed && broken_blocks > 0 && --broken_blocks == 0);
+        // printf("push loop\n");
+        *caller_stack_head++ = (union caller_info) {
+            .loop = {
+                .variant = LOOP,
+                .executed = break_level == 0,
+                .saved_p = p - 2,
+            },
+        };
         break;
     }
     case 0x04: // if
     {
         p++; // blocktype
-        _Bool executed = broken_blocks == 0;
-        broken_blocks += executed && *--stack_head;
-        eval_until(0x0b);
-        broken_blocks -= executed && broken_blocks > 0;
+        // printf("push if\n");
+        *caller_stack_head++ = (union caller_info) {
+            .block_or_if = {
+                .variant = BLOCK_OR_IF,
+                .executed = break_level == 0,
+            },
+        };
+        break_level += break_level == 0 && *--stack_head;
+        break;
+    }
+    case 0x0b: // end
+    {
+        union caller_info *caller = --caller_stack_head;
+        switch (caller->variant) {
+        case BLOCK_OR_IF:
+            // printf("pop block/if\n");
+            break_level -= caller->block_or_if.executed && break_level > 0;
+            break;
+        case LOOP:
+            // printf("pop loop\n");
+            if (caller->loop.executed && break_level > 0 && --break_level == 0) {
+                p = caller->loop.saved_p;
+            }
+            break;
+        case FUNC:
+            // printf("pop func at bl=%d\n", break_level);
+            break_level = 0;
+            locals = caller->func.saved_locals;
+            p = caller->func.saved_p;
+            // printf("Exit\n", p);
+            break;
+        }
         break;
     }
     case 0x0c: // br
     {
         unsigned labelidx = read_uint();
         PARSED;
-        broken_blocks = labelidx + 1;
+        // printf("break for %u\n", labelidx + 1);
+        break_level = labelidx + 1;
         break;
     }
     case 0x0d: // br_if
@@ -105,7 +166,7 @@ void eval_instr() {
         PARSED;
         // printf("br_if with condition %lu\n", stack_head[-1]);
         if (*--stack_head) {
-            broken_blocks = labelidx + 1;
+            break_level = labelidx + 1;
         }
         break;
     }
@@ -119,12 +180,12 @@ void eval_instr() {
         unsigned otherwise = read_uint();
         PARSED;
         unsigned i = *--stack_head;
-        broken_blocks = i < n_labels ? jump_table[i] : otherwise;
+        break_level = i < n_labels ? jump_table[i] : otherwise;
         break;
     }
     case 0x0f: // return
         PARSED;
-        broken_blocks = -1U;
+        break_level = -1U;
         break;
     case 0x10: // call
     {
@@ -356,15 +417,8 @@ void eval_instr() {
     }
 }
 
-void eval_until(unsigned char terminator) {
-    while (*p != terminator) {
-        eval_instr();
-    }
-    p++;
-}
-
 void call_func(unsigned funcidx) {
-    struct func_info* info = &funcs[funcidx];
+    struct func_info *info = &funcs[funcidx];
     if (info->typeidx == -1U) {
         // native code
         ((void (*)())info->func)();
@@ -372,7 +426,7 @@ void call_func(unsigned funcidx) {
     }
 
     // printf("Enter %u at %p\n", funcidx, p);
-    unsigned char *prev_p = p;
+    unsigned char *saved_p = p;
     p = info->func;
 
     unsigned n_local_groups = read_uint();
@@ -386,20 +440,26 @@ void call_func(unsigned funcidx) {
     p = declared_types[info->typeidx];
     unsigned n_args = read_uint();
 
-    unsigned long this_locals[n_args + n_locals];
-    unsigned long *prev_locals = locals;
-    locals = this_locals;
-
+    unsigned long *saved_locals = locals;
+    locals -= n_args + n_locals;
     memcpy(locals, stack_head - n_args, n_args * 8);
     stack_head -= n_args;
     p = body_p;
 
-    eval_until(0x0b);
-    broken_blocks = 0;
+    // printf("push func\n");
+    *caller_stack_head++ = (union caller_info) {
+        .func = {
+            .variant = FUNC,
+            .saved_locals = saved_locals,
+            .saved_p = saved_p,
+        },
+    };
+}
 
-    locals = prev_locals;
-    p = prev_p;
-    // printf("Exit %u at %p\n", funcidx, p);
+void eval_loop() {
+    while (p) {
+        eval_instr();
+    }
 }
 
 void fd_write() {
@@ -581,8 +641,11 @@ int main(int argc, char **argv) {
         }
     }
 
+    p = NULL;
     if (start_funcidx != (unsigned)-1) {
         call_func(start_funcidx);
+        eval_loop();
     }
     call_func(main_funcidx);
+    eval_loop();
 }
