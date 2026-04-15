@@ -4,15 +4,15 @@
 #include <unistd.h>
 
 unsigned char module_bytes[1024 * 1024];
-unsigned char *parse_p;
+unsigned char *p;
 
 unsigned long read_uint() {
     int shift = 0;
     unsigned long out = 0;
     do {
-        out |= (unsigned long)(*parse_p & 0x7f) << shift;
+        out |= (unsigned long)(*p & 0x7f) << shift;
         shift += 7;
-    } while (*parse_p++ & 0x80);
+    } while (*p++ & 0x80);
     return out;
 }
 
@@ -37,7 +37,7 @@ void call_func(unsigned funcidx);
 void eval_instr() {
 #define PARSED if (broken_blocks) break
 
-    unsigned char opcode = *parse_p++;
+    unsigned char opcode = *p++;
     switch (opcode) {
     case 0x00:
         // unreachable
@@ -48,7 +48,7 @@ void eval_instr() {
         break;
     case 0x02: {
         // block
-        parse_p++; // blocktype
+        p++; // blocktype
         _Bool executed = broken_blocks == 0;
         eval_until(0x0b);
         broken_blocks -= executed && broken_blocks > 0;
@@ -56,11 +56,11 @@ void eval_instr() {
     }
     case 0x03: {
         // loop
-        parse_p++; // blocktype
-        unsigned char *p = parse_p;
+        p++; // blocktype
+        unsigned char *saved_p = p;
         _Bool executed = broken_blocks == 0;
         do {
-            parse_p = p;
+            p = saved_p;
             eval_until(0x0b);
             broken_blocks -= executed && broken_blocks > 0;
         } while (broken_blocks == 0);
@@ -68,7 +68,7 @@ void eval_instr() {
     }
     case 0x04: {
         // if..end
-        parse_p++; // blocktype
+        p++; // blocktype
         _Bool executed = broken_blocks == 0;
         broken_blocks += executed && *--stack_head;
         eval_until(0x0b);
@@ -120,7 +120,7 @@ void eval_instr() {
     case 0x11: {
         // call_indirect
         read_uint(); // typeidx
-        parse_p++; // 0x00
+        p++; // 0x00
         PARSED;
         unsigned tableidx = *--stack_head;
         call_func(func_table[tableidx]);
@@ -284,26 +284,26 @@ void eval_instr() {
 }
 
 void eval_until(unsigned char terminator) {
-    while (*parse_p != terminator) {
+    while (*p != terminator) {
         eval_instr();
     }
-    parse_p++;
+    p++;
 }
 
 void call_func(unsigned funcidx) {
     // printf("Enter %u\n", funcidx);
-    unsigned char *prev_p = parse_p;
-    parse_p = funcs[funcidx];
+    unsigned char *prev_p = p;
+    p = funcs[funcidx];
 
     unsigned n_local_groups = read_uint();
     unsigned n_locals = 0;
     while (n_local_groups--) {
         n_locals += read_uint(); // n
-        parse_p++; // valtype
+        p++; // valtype
     }
 
-    unsigned char *p = parse_p;
-    parse_p = declared_types[func_types[funcidx]];
+    unsigned char *body_p = p;
+    p = declared_types[func_types[funcidx]];
     unsigned n_args = read_uint();
 
     unsigned long this_locals[n_args + n_locals];
@@ -312,13 +312,13 @@ void call_func(unsigned funcidx) {
 
     memcpy(locals, stack_head - n_args, n_args * 8);
     stack_head -= n_args;
-    parse_p = p;
+    p = body_p;
 
     eval_until(0x0b);
     broken_blocks = 0;
 
     locals = prev_locals;
-    parse_p = prev_p;
+    p = prev_p;
     // printf("Exit %u\n", funcidx);
 }
 
@@ -328,9 +328,9 @@ int main(int argc, char **argv) {
     int fd = open(argv[1], O_RDONLY);
     int len = read(fd, module_bytes, sizeof(module_bytes));
 
-    parse_p = module_bytes + 8;
-    while (parse_p != module_bytes + len) {
-        unsigned char section_type = *parse_p++;
+    p = module_bytes + 8;
+    while (p != module_bytes + len) {
+        unsigned char section_type = *p++;
         unsigned byte_len = read_uint();
         printf("section of type %d of length %u\n", section_type, byte_len);
 
@@ -339,11 +339,11 @@ int main(int argc, char **argv) {
             unsigned n_functypes = read_uint();
             printf("%u types\n", n_functypes);
             for (unsigned i = 0; i < n_functypes; i++) {
-                parse_p++; // 0x60
-                declared_types[i] = parse_p;
+                p++; // 0x60
+                declared_types[i] = p;
                 for (int j = 0; j < 2; j++) {
                     unsigned n_valtypes = read_uint();
-                    parse_p += n_valtypes; // valtype is single-byte
+                    p += n_valtypes; // valtype is single-byte
                 }
             }
         } else if (section_type == 2) {
@@ -353,15 +353,15 @@ int main(int argc, char **argv) {
 
             while (n_imports--) {
                 unsigned mod_len = read_uint();
-                parse_p += mod_len;
+                p += mod_len;
 
                 unsigned name_len = read_uint();
-                printf("import %.*s\n", name_len, parse_p);
-                parse_p += name_len;
+                printf("import %.*s\n", name_len, p);
+                p += name_len;
 
                 n_funcs++; // TODO: populate funcs and func_types
 
-                parse_p++; // 0x00
+                p++; // 0x00
                 read_uint();
             }
         } else if (section_type == 3) {
@@ -377,9 +377,9 @@ int main(int argc, char **argv) {
             printf("%u globals\n", n_globals);
 
             for (unsigned i = 0; i < n_globals; i++) {
-                unsigned char valtype = *parse_p++;
-                parse_p++; // mut
-                parse_p++; // t.const
+                unsigned char valtype = *p++;
+                p++; // mut
+                p++; // t.const
                 switch (valtype) {
                 case 0x7f:
                 case 0x7e:
@@ -388,16 +388,16 @@ int main(int argc, char **argv) {
                     break;
                 case 0x7d:
                     // f32
-                    memcpy(&globals[i], parse_p, 4);
-                    parse_p += 4;
+                    memcpy(&globals[i], p, 4);
+                    p += 4;
                     break;
                 case 0x7c:
                     // f64
-                    memcpy(&globals[i], parse_p, 8);
-                    parse_p += 8;
+                    memcpy(&globals[i], p, 8);
+                    p += 8;
                     break;
                 }
-                parse_p++; // end
+                p++; // end
             }
         } else if (section_type == 7) {
             // Export section
@@ -406,10 +406,10 @@ int main(int argc, char **argv) {
 
             for (unsigned i = 0; i < n_exports; i++) {
                 unsigned name_len = read_uint();
-                printf("export %.*s\n", name_len, parse_p);
-                _Bool is_start = name_len == 6 && memcmp(parse_p, "_start", 6) == 0;
-                parse_p += name_len;
-                parse_p++; // exportdesc variant
+                printf("export %.*s\n", name_len, p);
+                _Bool is_start = name_len == 6 && memcmp(p, "_start", 6) == 0;
+                p += name_len;
+                p++; // exportdesc variant
                 unsigned index = read_uint(); // exportdesc index
                 if (is_start) {
                     main_funcidx = index;
@@ -423,10 +423,10 @@ int main(int argc, char **argv) {
             unsigned n_elems = read_uint();
 
             while (n_elems--) {
-                parse_p++; // 0x00 tableidx
-                parse_p++; // i32.const
+                p++; // 0x00 tableidx
+                p++; // i32.const
                 unsigned offset = read_uint();
-                parse_p++; // end
+                p++; // end
                 unsigned n_funcidxs = read_uint();
                 printf("%u..%u elems\n", offset, offset + n_funcidxs);
                 while (n_funcidxs--) {
@@ -440,8 +440,8 @@ int main(int argc, char **argv) {
 
             while (n_codes--) {
                 unsigned int size = read_uint();
-                funcs[n_funcs++] = parse_p;
-                parse_p += size;
+                funcs[n_funcs++] = p;
+                p += size;
             }
         } else if (section_type == 11) {
             // Data section
@@ -449,17 +449,17 @@ int main(int argc, char **argv) {
             printf("%u datas\n", n_datas);
 
             for (unsigned i = 0; i < n_datas; i++) {
-                parse_p++; // 0x00 memidx
-                parse_p++; // i32.const
+                p++; // 0x00 memidx
+                p++; // i32.const
                 unsigned offset = read_uint();
-                parse_p++; // end
+                p++; // end
                 unsigned len = read_uint();
                 printf("%u..%u bytes\n", offset, offset + len);
-                memcpy(memory + offset, parse_p, len);
-                parse_p += len;
+                memcpy(memory + offset, p, len);
+                p += len;
             }
         } else {
-            parse_p += byte_len;
+            p += byte_len;
         }
     }
 
