@@ -458,3 +458,9 @@ Okay, so the issue was that I didn't handle `loop` correctly. If there was a `br
 ---
 
 Here's another idea: I currently have two invocations of `eval_loop`, one for the start (initialization) function and one for `_start`. I could instead invoke `_start`, then before I evaluate it invoke the start function, and call `eval_loop` once. This effectively inserts a fake `(call <start function>)` at the beginning of `_start`. The reason to do this is because it allows me to unconditionally call `exit` when the caller stack empties (i.e. `p` is reset to `NULL`).
+
+---
+
+I should probably start working on making `stack` grow downward. I'm a little sad about it -- I really loved the `memcpy` from stack to locals -- but `pop` and `push` are just too compact to lose on this opportunity.
+
+That was easy.

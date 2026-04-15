@@ -43,7 +43,7 @@ struct func_info funcs[1024];
 unsigned n_funcs;
 unsigned char memory[2 * 1024 * 1024];
 unsigned long stack[1024];
-unsigned long *stack_head = stack;
+unsigned long *stack_head = stack + sizeof(stack) / sizeof(stack[0]);
 unsigned long locals_stack[1024];
 unsigned long *locals = locals_stack + sizeof(locals_stack) / sizeof(locals_stack[0]);
 
@@ -125,7 +125,7 @@ void eval_instr() {
                 .executed = break_level == 0,
             },
         };
-        break_level += break_level == 0 && *--stack_head;
+        break_level += break_level == 0 && *stack_head++;
         break;
     }
     case 0x0b: // end
@@ -164,8 +164,8 @@ void eval_instr() {
     {
         unsigned labelidx = read_uint();
         PARSED;
-        // printf("br_if with condition %lu\n", stack_head[-1]);
-        if (*--stack_head) {
+        // printf("br_if with condition %lu\n", *stack_head);
+        if (*stack_head++) {
             break_level = labelidx + 1;
         }
         break;
@@ -179,7 +179,7 @@ void eval_instr() {
         }
         unsigned otherwise = read_uint();
         PARSED;
-        unsigned i = *--stack_head;
+        unsigned i = *stack_head++;
         break_level = i < n_labels ? jump_table[i] : otherwise;
         break;
     }
@@ -199,56 +199,56 @@ void eval_instr() {
         read_uint(); // typeidx
         read_uint(); // tableidx. always 0, but may be overlong
         PARSED;
-        unsigned tableidx = *--stack_head;
+        unsigned tableidx = *stack_head++;
         call_func(func_table[tableidx]);
         break;
     }
     case 0x1a: // drop
         PARSED;
-        stack_head--;
+        stack_head++;
         break;
     case 0x1b: // select
     {
         PARSED;
-        unsigned long cond = *--stack_head;
-        unsigned long b = *--stack_head;
+        unsigned long cond = *stack_head++;
+        unsigned long b = *stack_head++;
         // printf("select with condition %lu\n", cond);
-        stack_head[-1] = cond ? stack_head[-1] : b;
+        *stack_head = cond ? *stack_head : b;
         break;
     }
     case 0x20: // local.get
     {
         unsigned localidx = read_uint();
         PARSED;
-        *stack_head++ = locals[localidx];
+        *--stack_head = locals[localidx];
         break;
     }
     case 0x21: // local.set
     {
         unsigned localidx = read_uint();
         PARSED;
-        locals[localidx] = *--stack_head;
+        locals[localidx] = *stack_head++;
         break;
     }
     case 0x22: // local.tee
     {
         unsigned localidx = read_uint();
         PARSED;
-        locals[localidx] = stack_head[-1];
+        locals[localidx] = *stack_head;
         break;
     }
     case 0x23: // global.get
     {
         unsigned globalidx = read_uint();
         PARSED;
-        *stack_head++ = globals[globalidx];
+        *--stack_head = globals[globalidx];
         break;
     }
     case 0x24: // global.set
     {
         unsigned globalidx = read_uint();
         PARSED;
-        globals[globalidx] = *--stack_head;
+        globals[globalidx] = *stack_head++;
         break;
     }
     case 0x28: // i32.load
@@ -259,7 +259,7 @@ void eval_instr() {
         read_uint(); // align
         unsigned offset = read_uint();
         PARSED;
-        unsigned address = offset + stack_head[-1];
+        unsigned address = offset + *stack_head;
         unsigned long value = 0;
         unsigned len = (
             opcode == 0x28 ? 4 :
@@ -269,7 +269,7 @@ void eval_instr() {
             -1U
         );
         memcpy(&value, memory + address, len);
-        stack_head[-1] = value;
+        *stack_head = value;
         break;
     }
     case 0x36: // i32.store
@@ -280,8 +280,8 @@ void eval_instr() {
         read_uint(); // align
         unsigned offset = read_uint();
         PARSED;
-        unsigned long value = *--stack_head;
-        unsigned address = offset + *--stack_head;
+        unsigned long value = *stack_head++;
+        unsigned address = offset + *stack_head++;
         unsigned len = (
             opcode == 0x36 ? 4 :
             opcode == 0x37 ? 8 :
@@ -297,7 +297,7 @@ void eval_instr() {
     {
         long c = read_sint();
         PARSED;
-        *stack_head++ = opcode == 0x41 ? (unsigned)c : c;
+        *--stack_head = opcode == 0x41 ? (unsigned)c : c;
         break;
     }
     case 0x45: // i32.eqz
@@ -305,14 +305,14 @@ void eval_instr() {
     case 0x68: // i32.ctz
     {
         PARSED;
-        unsigned long x = stack_head[-1];
+        unsigned long x = *stack_head;
         x = (
             opcode == 0x45 ? x == 0 :
-            opcode == 0x67 ? __builtin_clzg(stack_head[-1], 32) :
-            opcode == 0x68 ? __builtin_ctzg(stack_head[-1], 32) :
+            opcode == 0x67 ? __builtin_clzg(x, 32) :
+            opcode == 0x68 ? __builtin_ctzg(x, 32) :
             -1UL
         );
-        stack_head[-1] = x;
+        *stack_head = x;
         break;
     }
     case 0x46: // i32.eq
@@ -328,8 +328,8 @@ void eval_instr() {
     case 0x6c: // i32.mul
     {
         PARSED;
-        unsigned long b = *--stack_head;
-        unsigned long a = stack_head[-1];
+        unsigned long b = *stack_head++;
+        unsigned long a = *stack_head;
         _Bool cond = (
             opcode == 0x46 || opcode == 0x51 ? a == b :
             opcode == 0x47 || opcode == 0x52 ? a != b :
@@ -342,7 +342,7 @@ void eval_instr() {
             opcode == 0x6c ? (unsigned)(a * b) :
             0
         );
-        stack_head[-1] = cond;
+        *stack_head = cond;
         break;
     }
     case 0x6a: // i32.add
@@ -361,8 +361,8 @@ void eval_instr() {
     case 0x86: // i64.shl
     {
         PARSED;
-        unsigned long b = *--stack_head;
-        unsigned long a = stack_head[-1];
+        unsigned long b = *stack_head++;
+        unsigned long a = *stack_head;
         unsigned long value = (
             opcode == 0x6a ? (unsigned)(a + b) :
             opcode == 0x6b ? (unsigned)(a - b) :
@@ -378,20 +378,20 @@ void eval_instr() {
             opcode == 0x86 ? a << (b % 64) :
             0
         );
-        stack_head[-1] = value;
+        *stack_head = value;
         break;
     }
     case 0x99: // f64.abs
         PARSED;
-        stack_head[-1] = stack_head[-1] & ((-1ULL) >> 1);
+        *stack_head &= (-1ULL) >> 1;
         break;
     case 0xad: // i64.extend_i32_u
         PARSED;
-        stack_head[-1] = (unsigned)stack_head[-1];
+        *stack_head = (unsigned)*stack_head;
         break;
     case 0xc0: // i32.extend8_s
         PARSED;
-        stack_head[-1] = (unsigned long)(int)(char)stack_head[-1];
+        *stack_head = (unsigned long)(int)(char)*stack_head;
         break;
     case 0xfc:
         opcode = *p++;
@@ -400,9 +400,9 @@ void eval_instr() {
         {
             p += 2; // memidx x2
             PARSED;
-            unsigned n = *--stack_head;
-            unsigned src = *--stack_head;
-            unsigned dst = *--stack_head;
+            unsigned n = *stack_head++;
+            unsigned src = *stack_head++;
+            unsigned dst = *stack_head++;
             memmove(memory + dst, memory + src, n);
             break;
         }
@@ -442,8 +442,10 @@ void call_func(unsigned funcidx) {
 
     unsigned long *saved_locals = locals;
     locals -= n_args + n_locals;
-    memcpy(locals, stack_head - n_args, n_args * 8);
-    stack_head -= n_args;
+    for (unsigned i = 0; i < n_args; i++) {
+        locals[i] = stack_head[n_args - 1 - i];
+    }
+    stack_head += n_args;
     p = body_p;
 
     // printf("push func\n");
@@ -457,10 +459,10 @@ void call_func(unsigned funcidx) {
 }
 
 void fd_write() {
-    unsigned n_written = *--stack_head;
-    unsigned iovs_len = *--stack_head;
-    unsigned iovs = *--stack_head;
-    unsigned fd = stack_head[-1];
+    unsigned n_written = *stack_head++;
+    unsigned iovs_len = *stack_head++;
+    unsigned iovs = *stack_head++;
+    unsigned fd = *stack_head;
 
     struct wasi_iovec {
         unsigned buf;
@@ -484,7 +486,7 @@ void fd_write() {
         wasi_out = 0;
     }
 
-    stack_head[-1] = wasi_out;
+    *stack_head = wasi_out;
 }
 
 int main(int argc, char **argv) {
