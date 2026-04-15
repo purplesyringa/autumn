@@ -1,12 +1,43 @@
-#include <errno.h>
 #include <fcntl.h>
-#include <stdio.h>
-#include <string.h>
+#include <stdint.h>
+// #include <stdio.h>
+#include <sys/syscall.h>
 #include <sys/uio.h>
 #include <unistd.h>
 
 unsigned char module_bytes[1024 * 1024];
 unsigned char *p;
+
+int memcmp(const void *, const void *, size_t);
+
+static void copy_forward(void *dst, const void *src, size_t n) {
+    asm volatile ("rep movsb" : "+D"(dst), "+S"(src), "+c"(n) : : "memory");
+}
+
+static void *memcpy(void *dst, const void *src, size_t n) {
+    copy_forward(dst, src, n);
+    return dst;
+}
+
+static void *memmove(void *dst, const void *src, size_t n) {
+    if ((uintptr_t)src < (uintptr_t)dst) {
+        copy_forward(dst, src, n);
+    } else {
+        dst = (char *)dst + n - 1;
+        src = (char *)src + n - 1;
+        asm volatile ("std; rep movsb; cld" : "+D"(dst), "+S"(src), "+c"(n) : : "memory");
+    }
+    return dst;
+}
+
+static long syscall2(long sysno, long a, long b) {
+    asm volatile ("syscall" : "+a"(sysno) : "D"(a), "S"(b) : "rcx", "r11", "memory");
+    return sysno;
+}
+static long syscall3(long sysno, long a, long b, long c) {
+    asm volatile ("syscall" : "+a"(sysno) : "D"(a), "S"(b), "d"(c) : "rcx", "r11", "memory");
+    return sysno;
+}
 
 static unsigned long impl_read_int(_Bool is_signed) {
     int shift = 0;
@@ -407,12 +438,12 @@ static void eval_instr() {
             break;
         }
         default:
-            printf("Unknown opcode 0xfc 0x%02x\n", opcode);
+            // printf("Unknown opcode 0xfc 0x%02x\n", opcode);
             __builtin_trap();
         }
         break;
     default:
-        printf("Unknown opcode 0x%02x\n", opcode);
+        // printf("Unknown opcode 0x%02x\n", opcode);
         __builtin_trap();
     }
 }
@@ -476,11 +507,11 @@ static void fd_write() {
             .iov_len = wasi_iovs[i].buf_len,
         };
     }
-    ssize_t native_out = writev(fd, native_iovs, iovs_len);
+    ssize_t native_out = syscall3(SYS_writev, fd, (long)native_iovs, iovs_len);
 
     unsigned long wasi_out;
-    if (native_out == -1) {
-        wasi_out = errno;
+    if (native_out < 0) {
+        wasi_out = -native_out;
     } else {
         memcpy(memory + n_written, &native_out, 4);
         wasi_out = 0;
@@ -492,19 +523,19 @@ static void fd_write() {
 int main(int argc, char **argv) {
     (void)argc;
 
-    int fd = open(argv[1], O_RDONLY);
-    int len = read(fd, module_bytes, sizeof(module_bytes));
+    int fd = syscall2(SYS_open, (long)argv[1], O_RDONLY);
+    int len = syscall3(SYS_read, fd, (long)module_bytes, sizeof(module_bytes));
 
     p = module_bytes + 8;
     while (p != module_bytes + len) {
         unsigned char section_type = *p++;
         unsigned byte_len = read_uint();
-        printf("section of type %d of length %u\n", section_type, byte_len);
+        // printf("section of type %d of length %u\n", section_type, byte_len);
 
         if (section_type == 1) {
             // Type section
             unsigned n_functypes = read_uint();
-            printf("%u types\n", n_functypes);
+            // printf("%u types\n", n_functypes);
             for (unsigned i = 0; i < n_functypes; i++) {
                 p++; // 0x60
                 declared_types[i] = p;
@@ -516,14 +547,14 @@ int main(int argc, char **argv) {
         } else if (section_type == 2) {
             // Import section
             unsigned n_imports = read_uint();
-            printf("%u imports\n", n_imports);
+            // printf("%u imports\n", n_imports);
 
             while (n_imports--) {
                 unsigned mod_len = read_uint();
                 p += mod_len;
 
                 unsigned name_len = read_uint();
-                printf("import %.*s\n", name_len, p);
+                // printf("import %.*s\n", name_len, p);
 
                 void (*func)() = NULL;
                 if (name_len == 8 && memcmp(p, "fd_write", 8) == 0) {
@@ -541,14 +572,14 @@ int main(int argc, char **argv) {
         } else if (section_type == 3) {
             // Function section
             unsigned n_sigs = read_uint();
-            printf("%u function signatures\n", n_sigs);
+            // printf("%u function signatures\n", n_sigs);
             for (unsigned i = 0; i < n_sigs; i++) {
                 funcs[n_funcs + i].typeidx = read_uint();
             }
         } else if (section_type == 6) {
             // Global section
             unsigned n_globals = read_uint();
-            printf("%u globals\n", n_globals);
+            // printf("%u globals\n", n_globals);
 
             for (unsigned i = 0; i < n_globals; i++) {
                 unsigned char valtype = *p++;
@@ -576,11 +607,11 @@ int main(int argc, char **argv) {
         } else if (section_type == 7) {
             // Export section
             unsigned n_exports = read_uint();
-            printf("%u exports\n", n_exports);
+            // printf("%u exports\n", n_exports);
 
             for (unsigned i = 0; i < n_exports; i++) {
                 unsigned name_len = read_uint();
-                printf("export %.*s\n", name_len, p);
+                // printf("export %.*s\n", name_len, p);
                 _Bool is_start = name_len == 6 && memcmp(p, "_start", 6) == 0;
                 p += name_len;
                 p++; // exportdesc variant
@@ -602,7 +633,7 @@ int main(int argc, char **argv) {
                 unsigned offset = read_uint();
                 p++; // end
                 unsigned n_funcidxs = read_uint();
-                printf("%u..%u elems\n", offset, offset + n_funcidxs);
+                // printf("%u..%u elems\n", offset, offset + n_funcidxs);
                 while (n_funcidxs--) {
                     func_table[offset++] = read_uint();
                 }
@@ -610,7 +641,7 @@ int main(int argc, char **argv) {
         } else if (section_type == 10) {
             // Code section
             unsigned n_codes = read_uint();
-            printf("%u codes\n", n_codes);
+            // printf("%u codes\n", n_codes);
 
             while (n_codes--) {
                 unsigned int size = read_uint();
@@ -620,7 +651,7 @@ int main(int argc, char **argv) {
         } else if (section_type == 11) {
             // Data section
             unsigned n_datas = read_uint();
-            printf("%u datas\n", n_datas);
+            // printf("%u datas\n", n_datas);
 
             for (unsigned i = 0; i < n_datas; i++) {
                 p++; // 0x00 memidx
@@ -628,7 +659,7 @@ int main(int argc, char **argv) {
                 unsigned offset = read_uint();
                 p++; // end
                 unsigned len = read_uint();
-                printf("%u..%u bytes\n", offset, offset + len);
+                // printf("%u..%u bytes\n", offset, offset + len);
                 memcpy(memory + offset, p, len);
                 p += len;
             }
@@ -646,3 +677,15 @@ int main(int argc, char **argv) {
         eval_instr();
     }
 }
+
+asm (
+    ".globl _start;"
+    "_start:"
+    "pop %rdi;" // argc
+    "mov %rsp, %rsi;" // argv
+    // we don't need envp
+    "call main;"
+    "mov $60, %eax;" // exit
+    "xor %edi, %edi;"
+    "syscall"
+);

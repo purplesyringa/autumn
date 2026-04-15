@@ -490,3 +490,9 @@ $ nm -S --size-sort interp-small | grep -i ' t ' | cut -d' ' -f2-
 ```
 
 There's a suspicious discrepancy -- the sizes reported by `nm` sum up to 5000, significantly below 7545. I'd assume that's due to alignment, but `-fno-align-functions` doesn't help. There must be unaccounted data in `.text`. Maybe it's PLT? We don't really need to link to anything, and I think this time is as good as any to get rid of the libc dependency.
+
+---
+
+Man, that's a lot of stuff to reimplement. It's not *that* much, it's really just `memcpy`, `memmove`, `syscall`, and `_start`. But `syscall` has to be a macro, and that gets ugly. Just take a look at `musl`'s `syscall`. I guess I can just implement `syscall` for specific sizes.
+
+Implementing `_start` correctly requires reading the Linux ABI stack: https://articles.manugarg.com/aboutelfauxiliaryvectors (though this post assumes a 32-bit architecture).
