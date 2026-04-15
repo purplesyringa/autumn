@@ -56,12 +56,11 @@ void eval_instr() {
         parse_p++; // blocktype
         unsigned char *p = parse_p;
         _Bool executed = broken_blocks == 0;
-        eval_until(0x0b);
-        while (broken_blocks == 0) {
+        do {
             parse_p = p;
             eval_until(0x0b);
-        }
-        broken_blocks -= executed;
+            broken_blocks -= executed && broken_blocks > 0;
+        } while (broken_blocks == 0);
         break;
     }
     case 0x0d: {

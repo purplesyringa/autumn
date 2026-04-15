@@ -174,3 +174,7 @@ case 0x02: {
 ```
 
 It's kind of neat. Ugly but neat.
+
+---
+
+Realized my implementation might be wrong? Branching to a loop is supposed to be like `continue`, while I treat it as `break`. Basically, 0 breaks from a loop body and 1 break from a loop body should be treated the same, but not a greater amount.
