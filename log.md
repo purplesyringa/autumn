@@ -464,3 +464,29 @@ Here's another idea: I currently have two invocations of `eval_loop`, one for th
 I should probably start working on making `stack` grow downward. I'm a little sad about it -- I really loved the `memcpy` from stack to locals -- but `pop` and `push` are just too compact to lose on this opportunity.
 
 That was easy.
+
+---
+
+Okay, now to actually start working on getting the size down. Turns out I forgot to make local functions `static`, so that increased the binary size a bit.
+
+```
+$ size interp-small
+   text	   data	    bss	    dec	    hex	filename
+   7545	    672	3227808	3236025	 3160b9	interp-small
+
+$ nm -S --size-sort interp-small | grep -i ' t ' | cut -d' ' -f2-
+0000000000000002 t main.cold
+000000000000000d T _fini
+000000000000001b T _init
+0000000000000020 t frame_dummy
+0000000000000026 T _start
+0000000000000030 t deregister_tm_clones
+0000000000000040 t register_tm_clones
+0000000000000050 t __do_global_dtors_aux
+0000000000000062 t impl_read_int
+00000000000000df t fd_write
+0000000000000137 t call_func
+0000000000000ffe T main
+```
+
+There's a suspicious discrepancy -- the sizes reported by `nm` sum up to 5000, significantly below 7545. I'd assume that's due to alignment, but `-fno-align-functions` doesn't help. There must be unaccounted data in `.text`. Maybe it's PLT? We don't really need to link to anything, and I think this time is as good as any to get rid of the libc dependency.

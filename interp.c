@@ -8,7 +8,7 @@
 unsigned char module_bytes[1024 * 1024];
 unsigned char *p;
 
-unsigned long impl_read_int(_Bool is_signed) {
+static unsigned long impl_read_int(_Bool is_signed) {
     int shift = 0;
     unsigned long out = 0;
     do {
@@ -21,11 +21,11 @@ unsigned long impl_read_int(_Bool is_signed) {
     return out;
 }
 
-unsigned long read_uint() {
+static unsigned long read_uint() {
     return impl_read_int(0);
 }
 
-long read_sint() {
+static long read_sint() {
     return impl_read_int(1);
 }
 
@@ -73,9 +73,9 @@ union caller_info caller_stack[1024];
 union caller_info *caller_stack_head = caller_stack;
 unsigned break_level;
 
-void call_func(unsigned funcidx);
+static void call_func(unsigned funcidx);
 
-void eval_instr() {
+static void eval_instr() {
 #define PARSED if (break_level) break
 
     unsigned char opcode = *p++;
@@ -417,7 +417,7 @@ void eval_instr() {
     }
 }
 
-void call_func(unsigned funcidx) {
+static void call_func(unsigned funcidx) {
     struct func_info *info = &funcs[funcidx];
     if (info->typeidx == -1U) {
         // native code
@@ -458,7 +458,7 @@ void call_func(unsigned funcidx) {
     };
 }
 
-void fd_write() {
+static void fd_write() {
     unsigned n_written = *stack_head++;
     unsigned iovs_len = *stack_head++;
     unsigned iovs = *stack_head++;
