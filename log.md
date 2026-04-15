@@ -188,3 +188,10 @@ Got to `call` and realized that, since I need to transfer arguments from the sta
 Implementing more instructions. Stumbled across `f64.abs`. I have a feeling some of the floating-point instructions are going to be nasty... Though `fnn.abs` in particular is luckily trivial.
 
 Implemented `if..end` (without `else`), it was pretty weird. Not as weird as `return`, though. I think the best way to implement `return` is to treat it as an infinite `br`, and reset `broken_blocks` to `0` at the end of the function. I think `-1U` works; I don't think I ever need to increment `broken_blocks` if it's already `> 0`, and using `-1` saves on code space.
+
+---
+
+Got to `i32.load8_u`. What does that even mean? I think it's `movzbl`, but otherwise like `i32.load`. That's my first instruction that reuses existing code!
+
+Though the next one is pretty close -- it's `i32.eq`, whereas I already implemented `i32.ne` and, in fact, some other comparisons.
+

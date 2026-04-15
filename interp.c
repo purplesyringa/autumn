@@ -139,14 +139,17 @@ void eval_instr() {
         *stack_head++ = globals[globalidx];
         break;
     }
-    case 0x28: {
-        // i32.load
+    case 0x28:
+    case 0x2d: {
+        // 0x28 i32.load
+        // 0x2d i32.load8_u
         read_uint(); // align
         unsigned offset = read_uint();
         PARSED;
         unsigned address = offset + stack_head[-1];
         unsigned value = 0;
-        memcpy(&value, memory + address, 4);
+        unsigned len = opcode == 0x28 ? 4 : opcode == 0x2d ? 1 : -1U;
+        memcpy(&value, memory + address, len);
         stack_head[-1] = value;
         break;
     }
@@ -173,25 +176,25 @@ void eval_instr() {
         stack_head[-1] = stack_head[-1] == 0;
         break;
     }
-    case 0x47: {
-        // i32.ne
-        PARSED;
-        unsigned long b = *--stack_head;
-        stack_head[-1] = stack_head[-1] != b;
-        break;
-    }
-    case 0x49: {
-        // i32.lt_u
-        PARSED;
-        unsigned long b = *--stack_head;
-        stack_head[-1] = stack_head[-1] < b;
-        break;
-    }
+    case 0x46:
+    case 0x47:
+    case 0x49:
     case 0x4b: {
-        // i32.gt_u
+        // 0x46 i32.eq
+        // 0x47 i32.ne
+        // 0x49 i32.lt_u
+        // 0x4b i32.gt_u
         PARSED;
         unsigned long b = *--stack_head;
-        stack_head[-1] = stack_head[-1] > b;
+        unsigned long a = stack_head[-1];
+        _Bool cond = (
+            opcode == 0x46 ? a == b :
+            opcode == 0x47 ? a != b :
+            opcode == 0x49 ? a < b :
+            opcode == 0x4b ? a > b :
+            0
+        );
+        stack_head[-1] = cond;
         break;
     }
     case 0x6a: {
