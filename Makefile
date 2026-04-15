@@ -1,5 +1,5 @@
 interp: interp.c
-	$(CC) $< -o $@ -O2 -Wall -Wextra -g -fno-stack-protector -nostdlib -static
+	$(CC) $< -o $@ -O2 -Wall -Wextra -g -fno-align-functions -fno-stack-protector -nostdlib -static
 
 interp-debug: interp.c
 	$(CC) $< -o $@ -O2 -Wall -Wextra -g -fsanitize=address -nostartfiles
