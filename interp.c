@@ -120,9 +120,9 @@ void eval_instr() {
     case 0x1b: {
         // select
         PARSED;
+        unsigned long cond = *--stack_head;
         unsigned long b = *--stack_head;
-        unsigned long a = *--stack_head;
-        stack_head[-1] = stack_head[-1] ? a : b;
+        stack_head[-1] = cond ? stack_head[-1] : b;
         break;
     }
     case 0x20: {
@@ -282,6 +282,7 @@ void eval_until(unsigned char terminator) {
 }
 
 void call_func(unsigned funcidx) {
+    // printf("Enter %u\n", funcidx);
     unsigned char *prev_p = parse_p;
     parse_p = funcs[funcidx];
 
@@ -309,6 +310,7 @@ void call_func(unsigned funcidx) {
 
     locals = prev_locals;
     parse_p = prev_p;
+    // printf("Exit %u\n", funcidx);
 }
 
 int main(int argc, char **argv) {

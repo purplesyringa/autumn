@@ -226,3 +226,81 @@ I parse the function type as `$5`, which is indeed defined as `(func (param i32 
 > The function section has the id 3. It decodes into a vector of type indices that represent the type fields of the functions in the funcs component of a module.
 
 Right, so the function section actually only touches on defined functions, not imported functions. The function section is parsed after the import section, so I can just use the value of `n_funcs` at that point as the offset.
+
+---
+
+Implemented more instructions and now it just hangs. It's doing *something*, but I don't know what. It's stuck in `$_RNvNtCsTnEDepTwQh_3std2rt19lang_start_internal`. There's a `loop` that does god knows what.
+
+```wast
+(loop $label
+ (br_if $block1
+  (i64.eq
+   (local.get $7)
+   (i64.const -1)
+  )
+ )
+ (i64.store offset=1055976
+  (i32.const 0)
+  (select
+   (local.tee $6
+    (i64.add
+     (local.get $7)
+     (i64.const 1)
+    )
+   )
+   (local.tee $8
+    (i64.load offset=1055976
+     (i32.const 0)
+    )
+   )
+   (local.tee $9
+    (i64.eq
+     (local.get $8)
+     (local.get $7)
+    )
+   )
+  )
+ )
+ (local.set $7
+  (local.get $8)
+ )
+ (br_if $label
+  (i32.eqz
+   (local.get $9)
+  )
+ )
+)
+```
+
+I'll take a look at Rust sources. I see a call to `sys::init`, responsible for parsing `argv`, and initially I thought that's the issue (I don't place anything useful in memory), but I found this in `sys::pal::wasi`:
+
+```rust
+pub fn cvt<T: IsMinusOne>(t: T) -> io::Result<T> {
+    if t.is_minus_one() { Err(io::Error::last_os_error()) } else { Ok(t) }
+}
+
+pub fn cvt_r<T, F>(mut f: F) -> io::Result<T>
+where
+    T: IsMinusOne,
+    F: FnMut() -> T,
+{
+    loop {
+        match cvt(f()) {
+            Err(ref e) if e.is_interrupted() => {}
+            other => return other,
+        }
+    }
+}
+```
+
+There's a loop, a comparison with `-1`, and a `select` based on whether something is `-1`. It's probably this. It's trying to handle `-EINTR`, but for which syscall?.. It's just reading from `1055976`. Maybe it's this line?
+
+```rust
+unsafe { main_thread::set(thread::current_id()) };
+```
+
+...and it's actually a global that should be initialized to some constant or something? Hmm... does `current_id` access a TLS? Does it try to allocate or something? What?
+
+Okay, I get it, no, the loop comes from `ThreadId::new`, which tries to generate a globally unique ID.
+
+Oh, I see. I misimplemented `select`. That makes a lot of sense, now execution continues further.
