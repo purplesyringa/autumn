@@ -1,5 +1,6 @@
 #include <fcntl.h>
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 
 unsigned char module_bytes[1024 * 1024];
@@ -16,6 +17,7 @@ unsigned long read_uint() {
 }
 
 unsigned char* declared_types[1024];
+unsigned long globals[1024];
 
 int main(int argc, char **argv) {
     int fd = open(argv[1], O_RDONLY);
@@ -54,6 +56,34 @@ int main(int argc, char **argv) {
 
                 parse_p++; // 0x00
                 read_uint();
+            }
+        } else if (section_type == 6) {
+            // Global section
+            unsigned n_globals = read_uint();
+            printf("%u globals\n", n_globals);
+
+            for (unsigned i = 0; i < n_globals; i++) {
+                unsigned char valtype = *parse_p++;
+                parse_p++; // mut
+                parse_p++; // t.const
+                switch (valtype) {
+                case 0x7f:
+                case 0x7e:
+                    // i32/i64
+                    globals[i] = read_uint();
+                    break;
+                case 0x7d:
+                    // f32
+                    memcpy(&globals[i], parse_p, 4);
+                    parse_p += 4;
+                    break;
+                case 0x7c:
+                    // f64
+                    memcpy(&globals[i], parse_p, 8);
+                    parse_p += 8;
+                    break;
+                }
+                parse_p++; // end
             }
         } else {
             parse_p += byte_len;

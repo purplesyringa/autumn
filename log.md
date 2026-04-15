@@ -58,3 +58,15 @@ This reads like Wasm GC. https://github.com/WebAssembly/reference-types Here's W
 The next section is the import section. Looks valuable. We can skip over the module name, since it should always be `wasi_snapshot_preview1` and it's a long constant to hard-code. I might use the length of the function name as key instead of the function name as well, just to laugh at PHP, but I probably shouldn't do that yet.
 
 I also only want to support `func` imports, not `table`/`mem`/`global`. This is really cool, actually: `importdesc` uses 0x00 for the `func` variant, and it's placed directly after the name, so `func` names are effectively automatically null-terminated. Cool!
+
+I'm not going to actually save anything yet, we'll see how imports are used later.
+
+---
+
+The next section is the function section. The first section we can (probably) skip! Looks like it just describes the function signatures, so it's only useful for type checking.
+
+The next section is the table section. I *think* we can also skip this one? Wasm 1.0 says there's only one table and it's always of `funcref`s, so it's not like there's anything to parse.
+
+The next section is the memory section. There can be only one memory in Wasm 1.0, so the only useful thing to extract here is the minimum and maxium size of the linear memory. We don't need to track the high boundary. Technically we don't need to track the low boundary either, we can just hardcode like 1 MiB and it'll work fine I guess. So we don't need this section either.
+
+The next section is the global section. This one contains values, so it's finally something we need to parse. The issue is that it contains initializers, which is code. Though the verification section says it must be a *constant* expression, which basically just means it needs to be a single `t.const` instruction. That simplifies things to say the least!
