@@ -48,23 +48,21 @@ void eval_instr() {
     //     printf("opcode 0x%02x\n", opcode);
     // }
     switch (opcode) {
-    case 0x00:
-        // unreachable
+    case 0x00: // unreachable
         PARSED;
         __builtin_trap();
-    case 0x01:
-        // nop
+    case 0x01: // nop
         break;
-    case 0x02: {
-        // block
+    case 0x02: // block
+    {
         p++; // blocktype
         _Bool executed = broken_blocks == 0;
         eval_until(0x0b);
         broken_blocks -= executed && broken_blocks > 0;
         break;
     }
-    case 0x03: {
-        // loop
+    case 0x03: // loop
+    {
         p++; // blocktype
         unsigned char *saved_p = p;
         _Bool executed = broken_blocks == 0;
@@ -74,8 +72,8 @@ void eval_instr() {
         } while (executed && broken_blocks > 0 && --broken_blocks == 0);
         break;
     }
-    case 0x04: {
-        // if..end
+    case 0x04: // if
+    {
         p++; // blocktype
         _Bool executed = broken_blocks == 0;
         broken_blocks += executed && *--stack_head;
@@ -83,15 +81,15 @@ void eval_instr() {
         broken_blocks -= executed && broken_blocks > 0;
         break;
     }
-    case 0x0c: {
-        // br
+    case 0x0c: // br
+    {
         unsigned labelidx = read_uint();
         PARSED;
         broken_blocks = labelidx + 1;
         break;
     }
-    case 0x0d: {
-        // br_if
+    case 0x0d: // br_if
+    {
         unsigned labelidx = read_uint();
         PARSED;
         // printf("br_if with condition %lu\n", stack_head[-1]);
@@ -100,8 +98,8 @@ void eval_instr() {
         }
         break;
     }
-    case 0x0e: {
-        // br_table
+    case 0x0e: // br_table
+    {
         unsigned n_labels = read_uint();
         unsigned jump_table[n_labels];
         for (unsigned i = 0; i < n_labels; i++) {
@@ -113,21 +111,21 @@ void eval_instr() {
         broken_blocks = i < n_labels ? jump_table[i] : otherwise;
         break;
     }
-    case 0x0f: {
-        // return
+    case 0x0f: // return
+    {
         PARSED;
         broken_blocks = -1U;
         break;
     }
-    case 0x10: {
-        // call
+    case 0x10: // call
+    {
         unsigned funcidx = read_uint();
         PARSED;
         call_func(funcidx);
         break;
     }
-    case 0x11: {
-        // call_indirect
+    case 0x11: // call_indirect
+    {
         read_uint(); // typeidx
         p++; // 0x00
         PARSED;
@@ -135,8 +133,8 @@ void eval_instr() {
         call_func(func_table[tableidx]);
         break;
     }
-    case 0x1b: {
-        // select
+    case 0x1b: // select
+    {
         PARSED;
         unsigned long cond = *--stack_head;
         unsigned long b = *--stack_head;
@@ -144,47 +142,45 @@ void eval_instr() {
         stack_head[-1] = cond ? stack_head[-1] : b;
         break;
     }
-    case 0x20: {
-        // local.get
+    case 0x20: // local.get
+    {
         unsigned localidx = read_uint();
         PARSED;
         *stack_head++ = locals[localidx];
         break;
     }
-    case 0x21: {
-        // local.set
+    case 0x21: // local.set
+    {
         unsigned localidx = read_uint();
         PARSED;
         locals[localidx] = *--stack_head;
         break;
     }
-    case 0x22: {
-        // local.tee
+    case 0x22: // local.tee
+    {
         unsigned localidx = read_uint();
         PARSED;
         locals[localidx] = stack_head[-1];
         break;
     }
-    case 0x23: {
-        // global.get
+    case 0x23: // global.get
+    {
         unsigned globalidx = read_uint();
         PARSED;
         *stack_head++ = globals[globalidx];
         break;
     }
-    case 0x24: {
-        // global.set
+    case 0x24: // global.set
+    {
         unsigned globalidx = read_uint();
         PARSED;
         globals[globalidx] = *--stack_head;
         break;
     }
-    case 0x28:
-    case 0x29:
-    case 0x2d: {
-        // 0x28 i32.load
-        // 0x29 i64.load
-        // 0x2d i32.load8_u
+    case 0x28: // i32.load
+    case 0x29: // i64.load
+    case 0x2d: // i32.load8_u
+    {
         read_uint(); // align
         unsigned offset = read_uint();
         PARSED;
@@ -200,14 +196,11 @@ void eval_instr() {
         stack_head[-1] = value;
         break;
     }
-    case 0x36: 
-    case 0x37:
-    case 0x3a:
-    case 0x3b: {
-        // 0x36 i32.store
-        // 0x37 i64.store
-        // 0x3a i32.store8
-        // 0x3b i32.store16
+    case 0x36: // i32.store
+    case 0x37: // i64.store
+    case 0x3a: // i32.store8
+    case 0x3b: // i32.store16
+    {
         read_uint(); // align
         unsigned offset = read_uint();
         PARSED;
@@ -223,39 +216,30 @@ void eval_instr() {
         memcpy(memory + address, &value, len);
         break;
     }
-    case 0x41:
-    case 0x42: {
-        // 0x41 i32.const
-        // 0x42 i64.const
+    case 0x41: // i32.const
+    case 0x42: // i64.const
+    {
         unsigned long c = read_uint();
         PARSED;
         *stack_head++ = c;
         break;
     }
-    case 0x45: {
-        // i32.eqz
+    case 0x45: // i32.eqz
+    {
         PARSED;
         stack_head[-1] = stack_head[-1] == 0;
         break;
     }
-    case 0x46:
-    case 0x47:
-    case 0x48:
-    case 0x49:
-    case 0x4a:
-    case 0x4b:
-    case 0x4d:
-    case 0x51:
-    case 0x52: {
-        // 0x46 i32.eq
-        // 0x47 i32.ne
-        // 0x48 i32.lt_s
-        // 0x49 i32.lt_u
-        // 0x4a i32.gt_s
-        // 0x4b i32.gt_u
-        // 0x4d i32.le_u
-        // 0x51 i64.eq
-        // 0x52 i64.ne
+    case 0x46: // i32.eq
+    case 0x47: // i32.ne
+    case 0x48: // i32.lt_s
+    case 0x49: // i32.lt_u
+    case 0x4a: // i32.gt_s
+    case 0x4b: // i32.gt_u
+    case 0x4d: // i32.le_u
+    case 0x51: // i64.eq
+    case 0x52: // i64.ne
+    {
         PARSED;
         unsigned long b = *--stack_head;
         unsigned long a = stack_head[-1];
@@ -272,26 +256,17 @@ void eval_instr() {
         stack_head[-1] = cond;
         break;
     }
-    case 0x6a:
-    case 0x6b:
-    case 0x71:
-    case 0x72:
-    case 0x73:
-    case 0x74:
-    case 0x76:
-    case 0x7c:
-    case 0x80:
-    case 0x81: {
-        // 0x6a i32.add
-        // 0x6b i32.sub
-        // 0x71 i32.and
-        // 0x72 i32.or
-        // 0x73 i32.xor
-        // 0x74 i32.shl
-        // 0x76 i32.shr_u
-        // 0x7c i64.add
-        // 0x80 i64.div_u
-        // 0x81 i64.rem_s
+    case 0x6a: // i32.add
+    case 0x6b: // i32.sub
+    case 0x71: // i32.and
+    case 0x72: // i32.or
+    case 0x73: // i32.xor
+    case 0x74: // i32.shl
+    case 0x76: // i32.shr_u
+    case 0x7c: // i64.add
+    case 0x80: // i64.div_u
+    case 0x81: // i64.rem_s
+    {
         PARSED;
         unsigned long b = *--stack_head;
         unsigned long a = stack_head[-1];
@@ -311,8 +286,8 @@ void eval_instr() {
         stack_head[-1] = value;
         break;
     }
-    case 0x99: {
-        // f64.abs
+    case 0x99: // f64.abs
+    {
         PARSED;
         stack_head[-1] = stack_head[-1] & ((-1ULL) >> 1);
         break;
