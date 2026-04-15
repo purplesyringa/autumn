@@ -133,6 +133,12 @@ void eval_instr() {
         call_func(func_table[tableidx]);
         break;
     }
+    case 0x1a: // drop
+    {
+        PARSED;
+        stack_head--;
+        break;
+    }
     case 0x1b: // select
     {
         PARSED;
@@ -225,9 +231,18 @@ void eval_instr() {
         break;
     }
     case 0x45: // i32.eqz
+    case 0x67: // i32.clz
+    case 0x68: // i32.ctz
     {
         PARSED;
-        stack_head[-1] = stack_head[-1] == 0;
+        unsigned long x = stack_head[-1];
+        x = (
+            opcode == 0x45 ? x == 0 :
+            opcode == 0x67 ? __builtin_clzg(stack_head[-1], 32) :
+            opcode == 0x68 ? __builtin_ctzg(stack_head[-1], 32) :
+            -1UL
+        );
+        stack_head[-1] = x;
         break;
     }
     case 0x46: // i32.eq
@@ -237,8 +252,10 @@ void eval_instr() {
     case 0x4a: // i32.gt_s
     case 0x4b: // i32.gt_u
     case 0x4d: // i32.le_u
+    case 0x4f: // i32.ge_u
     case 0x51: // i64.eq
     case 0x52: // i64.ne
+    case 0x6c: // i32.mul
     {
         PARSED;
         unsigned long b = *--stack_head;
@@ -251,6 +268,8 @@ void eval_instr() {
             opcode == 0x4a ? (int)a > (int)b :
             opcode == 0x4b ? a > b :
             opcode == 0x4d ? a <= b :
+            opcode == 0x4f ? a >= b :
+            opcode == 0x6c ? (unsigned)(a * b) :
             0
         );
         stack_head[-1] = cond;
@@ -263,6 +282,7 @@ void eval_instr() {
     case 0x73: // i32.xor
     case 0x74: // i32.shl
     case 0x76: // i32.shr_u
+    case 0x77: // i32.rotl
     case 0x7c: // i64.add
     case 0x80: // i64.div_u
     case 0x81: // i64.rem_s
@@ -278,6 +298,7 @@ void eval_instr() {
             opcode == 0x73 ? a ^ b :
             opcode == 0x74 ? (unsigned)a << (b % 32) :
             opcode == 0x76 ? a >> (b % 32) :
+            opcode == 0x77 ? (a << (b % 32)) | (a >> ((-b) % 32)) :
             opcode == 0x7c ? a + b :
             opcode == 0x80 ? a / b :
             opcode == 0x81 ? (unsigned long)((long)a % (long)b) :

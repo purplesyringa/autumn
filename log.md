@@ -373,3 +373,7 @@ $_RNvNtCsTnEDepTwQh_3std2rt19lang_start_internal
 Okay, so apparently I was misunderstanding how `loop` works. There's a `br_if` at the end of this `loop`, and apparently that's how the loop is `continue`d, but I think fallthrough should be equivalent to `break`, not `continue`:
 
 > This semantics also applies to the instruction sequence contained in a loop instruction. Therefore, execution of a loop falls off the end, unless a backwards branch is performed explicitly.
+
+---
+
+More instructions. `i32.ctz` is a fun one. Who could possibly need it in a hello-world? Oh, right, an allocator.
