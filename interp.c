@@ -23,6 +23,7 @@ unsigned start_funcidx = -1;
 unsigned long func_table[1024];
 unsigned char* funcs[1024];
 unsigned n_funcs;
+unsigned func_types[1024];
 unsigned char memory[2 * 1024 * 1024];
 unsigned long stack[1024];
 unsigned long* stack_head = stack;
@@ -30,6 +31,7 @@ unsigned long* stack_head = stack;
 unsigned broken_blocks;
 
 void eval_until(unsigned char terminator);
+void call_func(unsigned funcidx);
 
 void eval_instr() {
 #define PARSED if (broken_blocks) break;
@@ -70,6 +72,13 @@ void eval_instr() {
         if (*--stack_head) {
             broken_blocks = labelidx + 1;
         }
+        break;
+    }
+    case 0x10: {
+        // call
+        unsigned funcidx = read_uint();
+        PARSED;
+        call_func(funcidx);
         break;
     }
     case 0x23: {
@@ -138,10 +147,20 @@ void call_func(unsigned funcidx) {
     }
 
     unsigned long locals[n_locals];
+
+    unsigned char *p = parse_p;
+    parse_p = declared_types[func_types[funcidx]];
+    unsigned n_args = read_uint();
+    memcpy(locals, stack_head - n_args, n_args * 8);
+    stack_head -= n_args;
+    parse_p = p;
+
     eval_until(0x0b);
 }
 
 int main(int argc, char **argv) {
+    (void)argc;
+
     int fd = open(argv[1], O_RDONLY);
     int len = read(fd, module_bytes, sizeof(module_bytes));
 
@@ -180,6 +199,13 @@ int main(int argc, char **argv) {
 
                 parse_p++; // 0x00
                 read_uint();
+            }
+        } else if (section_type == 3) {
+            // Function section
+            unsigned n_sigs = read_uint();
+            printf("%u function signatures\n", n_sigs);
+            for (unsigned i = 0; i < n_sigs; i++) {
+                func_types[i] = read_uint();
             }
         } else if (section_type == 6) {
             // Global section
@@ -273,7 +299,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (start_funcidx != -1) {
+    if (start_funcidx != (unsigned)-1) {
         call_func(start_funcidx);
     }
     call_func(main_funcidx);
