@@ -39,6 +39,22 @@ int main(int argc, char **argv) {
                     parse_p += n_valtypes; // valtype is single-byte
                 }
             }
+        } else if (section_type == 2) {
+            // Import section
+            unsigned n_imports = read_uint();
+            printf("%u imports\n", n_imports);
+
+            for (unsigned i = 0; i < n_imports; i++) {
+                unsigned mod_len = read_uint();
+                parse_p += mod_len;
+
+                unsigned name_len = read_uint();
+                printf("import %.*s\n", name_len, parse_p);
+                parse_p += name_len;
+
+                parse_p++; // 0x00
+                read_uint();
+            }
         } else {
             parse_p += byte_len;
         }
