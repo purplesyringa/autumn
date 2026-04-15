@@ -200,3 +200,11 @@ Though the next one is pretty close -- it's `i32.eq`, whereas I already implemen
 Got to `br_table`. It doesn't refer to the function table, it's just an inline jump table. I guess that makes sense...
 
 Implemented `i64.rem_s` and promptly got SIGFPE because I forgot `PARSED`. Fun.
+
+---
+
+Well, that's interesting. I got the `0xec` opcode, and it's not documented in the Wasm 1.0 spec. Maybe later ones? Nope, Wasm 3.0 marks it as reserved too. Do I have a bug? That'd be rather unfortunate.
+
+I couldn't find any obvious bug, so I guess it's time to add some logging.
+
+Nevermind, got it pretty quickly after adding logs -- I forgot to reset `parse_p` after `call_func`. That's much better, now I just get `Segmentation fault`. Sigh.

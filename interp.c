@@ -35,13 +35,13 @@ void eval_until(unsigned char terminator);
 void call_func(unsigned funcidx);
 
 void eval_instr() {
-#define PARSED if (broken_blocks) break;
+#define PARSED if (broken_blocks) break
 
     unsigned char opcode = *parse_p++;
     switch (opcode) {
     case 0x00:
         // unreachable
-        PARSED
+        PARSED;
         __builtin_trap();
     case 0x01:
         // nop
@@ -118,6 +118,7 @@ void eval_instr() {
         break;
     }
     case 0x1b: {
+        // select
         PARSED;
         unsigned long b = *--stack_head;
         unsigned long a = *--stack_head;
@@ -258,6 +259,7 @@ void eval_until(unsigned char terminator) {
 }
 
 void call_func(unsigned funcidx) {
+    unsigned char *prev_p = parse_p;
     parse_p = funcs[funcidx];
 
     unsigned n_local_groups = read_uint();
@@ -282,6 +284,7 @@ void call_func(unsigned funcidx) {
     broken_blocks = 0;
 
     locals = prev_locals;
+    parse_p = prev_p;
 }
 
 int main(int argc, char **argv) {
