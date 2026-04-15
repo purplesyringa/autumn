@@ -575,3 +575,17 @@ Here: https://gcc.gnu.org/onlinedocs/gcc/Global-Register-Variables.html
 ```c
 register unsigned char *p asm ("r12");
 ```
+
+---
+
+I think I can't optimize this further with C alone. But before rewriting at least some parts of the code in assembly, I need to make sure it's feature-complete enough. Here's the missing opcodes from Wasm 3.0:
+
+- Floating-point memory accesses: `0x2a`, `0x2b`, `0x38`, `0x39`, `0x43`, `0x44`.
+- Size conversions: `0x2c`, `0x2e`, `0x30` to `0x35`, `0x3c` to `0x3e`, `0xa7` to `0xb1`, `0xc1` to `0xc4`.
+- Memory: `0x3f`, `0x40`.
+- Various comparisons: `0x4c`, `0x4e`, `0x50`, `0x53` to `0x66`.
+- Integer arithmetic: `0x69`, `0x6d` to `0x70`, `0x75`, `0x78` to `0x7b`, `0x7d` to `0x7f`, `0x82`, `0x85`, `0x87` to `0x8a`.
+- Floating-point arithmetic: `0x8b` to `0x98`, `0x9a` to `0xa6`.
+- Floating-point conversions: `0xb2` to `0xbf`, `0xfc 0x00` to `0xfc 0x07`.
+
+Most of them are present in Wasm 1.0 as well, so we can't really cheat that way. We can just refuse to support the various WasmGC features, vector extensions, and dynamic allocations, though.
