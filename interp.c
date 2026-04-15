@@ -191,9 +191,13 @@ void eval_instr() {
         break;
     }
     case 0x36: 
-    case 0x37: {
+    case 0x37:
+    case 0x3a:
+    case 0x3b: {
         // 0x36 i32.store
         // 0x37 i64.store
+        // 0x3a i32.store8
+        // 0x3b i32.store16
         read_uint(); // align
         unsigned offset = read_uint();
         PARSED;
@@ -202,6 +206,8 @@ void eval_instr() {
         unsigned len = (
             opcode == 0x36 ? 4 :
             opcode == 0x37 ? 8 :
+            opcode == 0x3a ? 1 :
+            opcode == 0x3b ? 2 :
             -1U
         );
         memcpy(memory + address, &value, len);
@@ -224,13 +230,17 @@ void eval_instr() {
     }
     case 0x46:
     case 0x47:
+    case 0x48:
     case 0x49:
+    case 0x4a:
     case 0x4b:
     case 0x51:
     case 0x52: {
         // 0x46 i32.eq
         // 0x47 i32.ne
+        // 0x48 i32.lt_s
         // 0x49 i32.lt_u
+        // 0x4a i32.gt_s
         // 0x4b i32.gt_u
         // 0x51 i64.eq
         // 0x52 i64.ne
@@ -240,7 +250,9 @@ void eval_instr() {
         _Bool cond = (
             opcode == 0x46 || opcode == 0x51 ? a == b :
             opcode == 0x47 || opcode == 0x52 ? a != b :
+            opcode == 0x48 ? (int)a < (int)b :
             opcode == 0x49 ? a < b :
+            opcode == 0x4a ? (int)a > (int)b :
             opcode == 0x4b ? a > b :
             0
         );
@@ -249,11 +261,15 @@ void eval_instr() {
     }
     case 0x6a:
     case 0x6b:
+    case 0x71:
+    case 0x76:
     case 0x7c:
     case 0x80:
     case 0x81: {
         // 0x6a i32.add
         // 0x6b i32.sub
+        // 0x71 i32.and
+        // 0x76 i32.shr_u
         // 0x7c i64.add
         // 0x80 i64.div_u
         // 0x81 i64.rem_s
@@ -263,6 +279,8 @@ void eval_instr() {
         unsigned long value = (
             opcode == 0x6a ? (unsigned)(a + b) :
             opcode == 0x6b ? (unsigned)(a - b) :
+            opcode == 0x71 ? a & b :
+            opcode == 0x76 ? a >> (b % 32) :
             opcode == 0x7c ? a + b :
             opcode == 0x80 ? a / b :
             opcode == 0x81 ? (unsigned long)((long)a % (long)b) :

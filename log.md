@@ -308,3 +308,7 @@ Oh, I see. I misimplemented `select`. That makes a lot of sense, now execution c
 ---
 
 Execution stopped at `call_indirect`. That's the call to `main`! We're pretty close.
+
+---
+
+Encountered `i32.shr_u`. I wonder how they handle shift values larger than type size... Right, they take it modulo `32`. Good.
