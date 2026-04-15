@@ -553,3 +553,7 @@ Found one in sunwalker-box. Tried to write it myself by hand for a minute but go
 Before optimizing stuff by hand, I wanted to see if I could improve code size by switching targets. I don't think it makes sense to switch to i686 -- we do need a lot of 64-bit arithmetic, so we'd likely lose on space. I wanted to try the x32 ABI, but it looks like it's getting less and less support day by day... unfortunate.
 
 I tried aarch64 just in case, but it was slightly larger, at 5384 bytes. (See `arm` branch.) I think ARM is just a bad choice for code golf.
+
+---
+
+Looked at the disassembly again and found more `nop`s. Realized I didn't enable `-fno-align-loops` and similar options. 4976 bytes now. Some `nop`s are still present; not sure what the deal is there.
