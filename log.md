@@ -408,3 +408,21 @@ I could swear it was unsigned integers. That makes more sense and makes everythi
 ---
 
 Now I get an undocumented `0xfc` opcode. This one's present in the Wasm 3.0 spec, though. Turns out it's a prefix. Must be a `memory.*` opcode -- the features listed `bulk-memory`, that's what it probably is. Yup, it's `memory.copy`, i.e. just `memmove`.
+
+---
+
+Yay, sanitizer errors again. I missed you. This time it's a stack underflow while evaluating `i64.div_u`. But there's only one `i64.div_u` in the code, and it's not immediately after a `return`, so I must've broken something about function calls.
+
+The function this happened in is never called directly. Maybe `call_indirect` is parsed wrong? `$_RNvNtCshbByS147RDD_4core3fmt5write` does use `call_indirect`. I genuinely feel like an LLM writing this.
+
+I'm confused. There are genuinely `0x80` (`i64.div_u`) bytes after `call_indirect`:
+
+```
+11 81 80 80 80 00 80 80 80 80 00 0b 02 40 20 05 28 ...
+```
+
+This is `call_indirect` followed an overlong encoding of the number `1` for `typeidx`, followed by `0x80` as the table index, etc. This is clearly malformed. What's going on? Did Wasm 3.0 change something important? Doesn't seem so.
+
+Is it due to relocations? I could imagine `call_indirect` being used to link different modules. And since modules might have different tables, you might want to change the tables and the memory... so it leaves fixed space for that? Wow.
+
+So apparently we're simply not allowed to skip uints that are documented to be exactly `0x00` in the Wasm 1.0 spec, because the Wasm 3.0 spec makes them variable and thus possibly overlong. It's a little too late to make this change everywhere, but I can at least fix it in `call_indirect`.

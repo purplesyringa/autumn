@@ -136,7 +136,7 @@ void eval_instr() {
     case 0x11: // call_indirect
     {
         read_uint(); // typeidx
-        p++; // 0x00
+        read_uint(); // tableidx. always 0, but may be overlong
         PARSED;
         unsigned tableidx = *--stack_head;
         call_func(func_table[tableidx]);
@@ -293,6 +293,7 @@ void eval_instr() {
     case 0x7c: // i64.add
     case 0x80: // i64.div_u
     case 0x81: // i64.rem_s
+    case 0x83: // i64.and
     {
         PARSED;
         unsigned long b = *--stack_head;
@@ -300,7 +301,7 @@ void eval_instr() {
         unsigned long value = (
             opcode == 0x6a ? (unsigned)(a + b) :
             opcode == 0x6b ? (unsigned)(a - b) :
-            opcode == 0x71 ? a & b :
+            opcode == 0x71 || opcode == 0x83 ? a & b :
             opcode == 0x72 ? a | b :
             opcode == 0x73 ? a ^ b :
             opcode == 0x74 ? (unsigned)a << (b % 32) :
@@ -357,7 +358,7 @@ void call_func(unsigned funcidx) {
         return;
     }
 
-    // printf("Enter %u\n", funcidx);
+    // printf("Enter %u at %p\n", funcidx, p);
     unsigned char *prev_p = p;
     p = info->func;
 
@@ -385,7 +386,7 @@ void call_func(unsigned funcidx) {
 
     locals = prev_locals;
     p = prev_p;
-    // printf("Exit %u\n", funcidx);
+    // printf("Exit %u at %p\n", funcidx, p);
 }
 
 void fd_write() {
