@@ -1,6 +1,8 @@
+#include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/uio.h>
 #include <unistd.h>
 
 unsigned char module_bytes[1024 * 1024];
@@ -16,14 +18,18 @@ unsigned long read_uint() {
     return out;
 }
 
+struct func_info {
+    unsigned char *func;
+    unsigned typeidx;
+};
+
 unsigned char* declared_types[1024];
 unsigned long globals[1024];
 unsigned main_funcidx;
 unsigned start_funcidx = -1;
 unsigned long func_table[1024];
-unsigned char* funcs[1024];
+struct func_info funcs[1024];
 unsigned n_funcs;
-unsigned func_types[1024];
 unsigned char memory[2 * 1024 * 1024];
 unsigned long stack[1024];
 unsigned long* stack_head = stack;
@@ -309,9 +315,16 @@ void eval_until(unsigned char terminator) {
 }
 
 void call_func(unsigned funcidx) {
+    struct func_info* info = &funcs[funcidx];
+    if (info->typeidx == -1U) {
+        // native code
+        ((void (*)())info->func)();
+        return;
+    }
+
     // printf("Enter %u\n", funcidx);
     unsigned char *prev_p = p;
-    p = funcs[funcidx];
+    p = info->func;
 
     unsigned n_local_groups = read_uint();
     unsigned n_locals = 0;
@@ -321,7 +334,7 @@ void call_func(unsigned funcidx) {
     }
 
     unsigned char *body_p = p;
-    p = declared_types[func_types[funcidx]];
+    p = declared_types[info->typeidx];
     unsigned n_args = read_uint();
 
     unsigned long this_locals[n_args + n_locals];
@@ -338,6 +351,37 @@ void call_func(unsigned funcidx) {
     locals = prev_locals;
     p = prev_p;
     // printf("Exit %u\n", funcidx);
+}
+
+void fd_write() {
+    unsigned n_written = *--stack_head;
+    unsigned iovs_len = *--stack_head;
+    unsigned iovs = *--stack_head;
+    unsigned fd = stack_head[-1];
+
+    struct wasi_iovec {
+        unsigned buf;
+        unsigned buf_len;
+    };
+    struct wasi_iovec *wasi_iovs = (void*)(memory + iovs);
+    struct iovec native_iovs[iovs_len];
+    for (unsigned i = 0; i < iovs_len; i++) {
+        native_iovs[i] = (struct iovec){
+            .iov_base = memory + wasi_iovs[i].buf,
+            .iov_len = wasi_iovs[i].buf_len,
+        };
+    }
+    ssize_t native_out = writev(fd, native_iovs, iovs_len);
+
+    unsigned long wasi_out;
+    if (native_out == -1) {
+        wasi_out = errno;
+    } else {
+        memcpy(memory + n_written, &native_out, 4);
+        wasi_out = 0;
+    }
+
+    stack_head[-1] = wasi_out;
 }
 
 int main(int argc, char **argv) {
@@ -375,10 +419,17 @@ int main(int argc, char **argv) {
 
                 unsigned name_len = read_uint();
                 printf("import %.*s\n", name_len, p);
+
+                void (*func)() = NULL;
+                if (name_len == 8 && memcmp(p, "fd_write", 8) == 0) {
+                    func = fd_write;
+                }
+                funcs[n_funcs++] = (struct func_info){
+                    .func = (unsigned char*)func,
+                    .typeidx = -1U,
+                };
+
                 p += name_len;
-
-                n_funcs++; // TODO: populate funcs and func_types
-
                 p++; // 0x00
                 read_uint();
             }
@@ -387,7 +438,7 @@ int main(int argc, char **argv) {
             unsigned n_sigs = read_uint();
             printf("%u function signatures\n", n_sigs);
             for (unsigned i = 0; i < n_sigs; i++) {
-                func_types[n_funcs + i] = read_uint();
+                funcs[n_funcs + i].typeidx = read_uint();
             }
         } else if (section_type == 6) {
             // Global section
@@ -458,7 +509,7 @@ int main(int argc, char **argv) {
 
             while (n_codes--) {
                 unsigned int size = read_uint();
-                funcs[n_funcs++] = p;
+                funcs[n_funcs++].func = p;
                 p += size;
             }
         } else if (section_type == 11) {

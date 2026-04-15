@@ -4,7 +4,7 @@ I also don't know which API to use for the module yet. I'm thinking WASI 0.1 (co
 
 Hmm, simple programs... maybe a Rust hello-world?
 
-```
+```shell
 cargo new hello-world
 cd hello-world
 cargo build --target wasm32-wasip1 --release
@@ -13,7 +13,7 @@ wasm-dis target/wasm32-wasip1/release/hello-world.wasm
 
 Here's the imports:
 
-```
+```wast
 (import "wasi_snapshot_preview1" "environ_get" (func $__imported_wasi_snapshot_preview1_environ_get (param i32 i32) (result i32)))
 (import "wasi_snapshot_preview1" "environ_sizes_get" (func $__imported_wasi_snapshot_preview1_environ_sizes_get (param i32 i32) (result i32)))
 (import "wasi_snapshot_preview1" "fd_write" (func $__imported_wasi_snapshot_preview1_fd_write (param i32 i32 i32 i32) (result i32)))
@@ -312,3 +312,35 @@ Execution stopped at `call_indirect`. That's the call to `main`! We're pretty cl
 ---
 
 Encountered `i32.shr_u`. I wonder how they handle shift values larger than type size... Right, they take it modulo `32`. Good.
+
+---
+
+Got a null pointer dereference. I'm assuming it's a function call to an import, since I don't handle them yet and just use `NULL`. `gdb` seems to agree.
+
+Time to handle imports it is. Here are the imports:
+
+```
+(import "wasi_snapshot_preview1" "environ_get" (func $__imported_wasi_snapshot_preview1_environ_get (param i32 i32) (result i32)))
+(import "wasi_snapshot_preview1" "environ_sizes_get" (func $__imported_wasi_snapshot_preview1_environ_sizes_get (param i32 i32) (result i32)))
+(import "wasi_snapshot_preview1" "fd_write" (func $__imported_wasi_snapshot_preview1_fd_write (param i32 i32 i32 i32) (result i32)))
+(import "wasi_snapshot_preview1" "proc_exit" (func $__imported_wasi_snapshot_preview1_proc_exit (param i32)))
+```
+
+The docs are here: https://github.com/WebAssembly/WASI/blob/wasi-0.1/preview1/docs.md
+
+`environ_sizes_get` returns `Result<(usize, usize), errno>`, but in reality it returns a `i32`. It also isn't supposed to take parameters, but it receives two of them. I guess those are output pointers and the return value is the discriminant? But I can't find the documentation for this.
+
+Found this: https://wasix.org/docs/api-reference/wasi/environ_sizes_get
+
+So not quite -- there are two output pointers, one per `usize`, and the return value is the `errno`.
+
+It's a bit unwieldy, so let's first try implementing the function that's actually being called, i.e. `fd_write`. It takes:
+
+- `fd` (obviously)
+- `iovs` -- pointer to an array of `__wasi_ciovec_t`s
+- `iovs_len` -- the number of iovecs
+- `nwritten` -- output pointer
+
+...and returns `errno`. Not quite Linux-like, but okay.
+
+Can I implement this with `writev`? Surely the ABI is compatible? Okay, no, probably not due to 64-bit vs 32-bit pointers. Unfortunate.
