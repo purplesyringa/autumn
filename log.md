@@ -547,3 +547,9 @@ Okay, let's try something different. Let's just write a linker script. I'm sure 
 Found one in sunwalker-box. Tried to write it myself by hand for a minute but got SIGSEGV when trying to run the ELF. I always forget the `. = 0x400000` line -- the kernel treats that as an absolute address and refuses to map anything at address 0, and without this line the default is `. = 0`.
 
 5200 bytes exactly. `elfcat` is much more pretty now -- it's just a single ELF segment. And I can still use the normal `interp` build for debugging and `nm`/`size`.
+
+---
+
+Before optimizing stuff by hand, I wanted to see if I could improve code size by switching targets. I don't think it makes sense to switch to i686 -- we do need a lot of 64-bit arithmetic, so we'd likely lose on space. I wanted to try the x32 ABI, but it looks like it's getting less and less support day by day... unfortunate.
+
+I tried aarch64 just in case, but it was slightly larger, at 5384 bytes. (See `arm` branch.) I think ARM is just a bad choice for code golf.
