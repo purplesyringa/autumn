@@ -149,3 +149,28 @@ Here's a relevant PR to Emscripten: https://github.com/emscripten-core/emscripte
 Is there an open LLVM issue? https://github.com/llvm/llvm-project/issues/187367
 
 Oh, I see `offset=...` in other places, I guess it's just this specific one that's broken due to a large offset. Okay.
+
+---
+
+Encountered `br_if`, this one requires labels. Time to read up on how they work.
+
+Labels are created when entering `block`, `loop`, and `if`, and are removed when exiting. De Bruijn indexing is used, with 0 for the innermost block-like instruction.
+
+Branching to the label of a `block`/`if` jumps to after it, branching to `loop` jumps to its start. A consistent way to interpret this is that we always jump to the end of the body, and that's probably easier to simulate. I think we can make `eval_until` return an integer that denotes how many levels we should break for. And then ignore instructions if the current block should be broken -- but still parse them, since we don't know where the current block ends and what to set `parse_p` to.
+
+Eugh. Ugly! We effectively have to gate each instruction behind an `if`. *And* we have to thread this flag into recursive `eval_until` invocations to skip over blocks. That sucks, but oh well, it'll have to do for now. *Maybe* we could separate parsing and evaluation at some point, but probably not yet.
+
+Okay, thought: use a global integer as a flag for breaking from blocks instead of threading it through every function call. That's becoming bearable, actually, e.g. here's how `block` is implemented:
+
+```c
+case 0x02: {
+    // block
+    parse_p++; // blocktype
+    _Bool executed = broken_blocks == 0;
+    eval_until(0x0b);
+    broken_blocks -= executed && broken_blocks > 0;
+    break;
+}
+```
+
+It's kind of neat. Ugly but neat.

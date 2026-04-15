@@ -27,58 +27,103 @@ unsigned char memory[2 * 1024 * 1024];
 unsigned long stack[1024];
 unsigned long* stack_head = stack;
 
+unsigned broken_blocks;
+
+void eval_until(unsigned char terminator);
+
+void eval_instr() {
+#define PARSED if (broken_blocks) break;
+
+    unsigned char opcode = *parse_p++;
+    switch (opcode) {
+    case 0x00:
+        // unreachable
+        PARSED
+        __builtin_trap();
+    case 0x01:
+        // nop
+        break;
+    case 0x02: {
+        // block
+        parse_p++; // blocktype
+        _Bool executed = broken_blocks == 0;
+        eval_until(0x0b);
+        broken_blocks -= executed && broken_blocks > 0;
+        break;
+    }
+    case 0x03: {
+        // loop
+        parse_p++; // blocktype
+        unsigned char *p = parse_p;
+        _Bool executed = broken_blocks == 0;
+        eval_until(0x0b);
+        while (broken_blocks == 0) {
+            parse_p = p;
+            eval_until(0x0b);
+        }
+        broken_blocks -= executed;
+        break;
+    }
+    case 0x0d: {
+        // br_if
+        unsigned labelidx = read_uint();
+        PARSED;
+        if (*--stack_head) {
+            broken_blocks = labelidx + 1;
+        }
+        break;
+    }
+    case 0x23: {
+        // global.get
+        unsigned globalidx = read_uint();
+        PARSED;
+        *stack_head++ = globals[globalidx];
+        break;
+    }
+    case 0x28: {
+        // i32.load
+        read_uint(); // align
+        unsigned offset = read_uint();
+        PARSED;
+        unsigned address = offset + stack_head[-1];
+        unsigned value = 0;
+        memcpy(&value, memory + address, 4);
+        stack_head[-1] = value;
+        break;
+    }
+    case 0x36: {
+        // i32.store
+        read_uint(); // align
+        unsigned offset = read_uint();
+        PARSED;
+        unsigned value = *--stack_head;
+        unsigned address = offset + *--stack_head;
+        memcpy(memory + address, &value, 4);
+        break;
+    }
+    case 0x41: {
+        // i32.const
+        unsigned c = read_uint();
+        PARSED;
+        *stack_head++ = c;
+        break;
+    }
+    case 0x6a: {
+        // i32.add
+        PARSED;
+        unsigned long b = *--stack_head;
+        stack_head[-1] = (unsigned)(stack_head[-1] + b);
+        break;
+    }
+    default:
+        printf("Unknown opcode 0x%02x\n", opcode);
+        __builtin_trap();
+    }
+}
+
 void eval_until(unsigned char terminator) {
     while (*parse_p != terminator) {
-        unsigned char opcode = *parse_p++;
-        switch (opcode) {
-        case 0x00:
-            // unreachable
-            __builtin_trap();
-        case 0x01:
-            // nop
-            break;
-        case 0x02:
-            // block
-            parse_p++; // blocktype
-            eval_until(0x0b);
-            break;
-        case 0x03:
-            // loop
-            parse_p++; // blocktype
-            unsigned char *p = parse_p;
-            for (;;) {
-                parse_p = p;
-                eval_until(0x0b);
-            }
-            break;
-        case 0x23:
-            // global.get
-            *stack_head++ = globals[read_uint()];
-            break;
-        case 0x28: {
-            // i32.load
-            read_uint(); // align
-            unsigned offset = read_uint();
-            unsigned address = offset + stack_head[-1];
-            unsigned value = 0;
-            memcpy(&value, memory + address, 4);
-            stack_head[-1] = value;
-            break;
-        }
-        case 0x41:
-            // i32.const
-            *stack_head++ = read_uint();
-            break;
-        case 0x6a: {
-            // i32.add
-            unsigned long b = *--stack_head;
-            stack_head[-1] = (unsigned)(stack_head[-1] + b);
-            break;
-        }
-        default:
-            printf("Unknown opcode 0x%02x\n", opcode);
-            __builtin_trap();
-        }
+        eval_instr();
     }
     parse_p++;
 }
