@@ -244,6 +244,7 @@ void eval_instr() {
     case 0x49:
     case 0x4a:
     case 0x4b:
+    case 0x4d:
     case 0x51:
     case 0x52: {
         // 0x46 i32.eq
@@ -252,6 +253,7 @@ void eval_instr() {
         // 0x49 i32.lt_u
         // 0x4a i32.gt_s
         // 0x4b i32.gt_u
+        // 0x4d i32.le_u
         // 0x51 i64.eq
         // 0x52 i64.ne
         PARSED;
@@ -264,6 +266,7 @@ void eval_instr() {
             opcode == 0x49 ? a < b :
             opcode == 0x4a ? (int)a > (int)b :
             opcode == 0x4b ? a > b :
+            opcode == 0x4d ? a <= b :
             0
         );
         stack_head[-1] = cond;
@@ -272,6 +275,9 @@ void eval_instr() {
     case 0x6a:
     case 0x6b:
     case 0x71:
+    case 0x72:
+    case 0x73:
+    case 0x74:
     case 0x76:
     case 0x7c:
     case 0x80:
@@ -279,6 +285,9 @@ void eval_instr() {
         // 0x6a i32.add
         // 0x6b i32.sub
         // 0x71 i32.and
+        // 0x72 i32.or
+        // 0x73 i32.xor
+        // 0x74 i32.shl
         // 0x76 i32.shr_u
         // 0x7c i64.add
         // 0x80 i64.div_u
@@ -290,6 +299,9 @@ void eval_instr() {
             opcode == 0x6a ? (unsigned)(a + b) :
             opcode == 0x6b ? (unsigned)(a - b) :
             opcode == 0x71 ? a & b :
+            opcode == 0x72 ? a | b :
+            opcode == 0x73 ? a ^ b :
+            opcode == 0x74 ? (unsigned)a << (b % 32) :
             opcode == 0x76 ? a >> (b % 32) :
             opcode == 0x7c ? a + b :
             opcode == 0x80 ? a / b :
