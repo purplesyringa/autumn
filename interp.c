@@ -18,6 +18,8 @@ unsigned long read_uint() {
 
 unsigned char* declared_types[1024];
 unsigned long globals[1024];
+unsigned main_funcidx;
+unsigned start_funcidx = -1;
 
 int main(int argc, char **argv) {
     int fd = open(argv[1], O_RDONLY);
@@ -85,6 +87,25 @@ int main(int argc, char **argv) {
                 }
                 parse_p++; // end
             }
+        } else if (section_type == 7) {
+            // Export section
+            unsigned n_exports = read_uint();
+            printf("%u exports\n", n_exports);
+
+            for (unsigned i = 0; i < n_exports; i++) {
+                unsigned name_len = read_uint();
+                printf("export %.*s\n", name_len, parse_p);
+                _Bool is_start = name_len == 6 && memcmp(parse_p, "_start", 6) == 0;
+                parse_p += name_len;
+                parse_p++; // exportdesc variant
+                unsigned index = read_uint(); // exportdesc index
+                if (is_start) {
+                    main_funcidx = index;
+                }
+            }
+        } else if (section_type == 8) {
+            // Start section
+            start_funcidx = read_uint();
         } else {
             parse_p += byte_len;
         }

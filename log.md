@@ -70,3 +70,11 @@ The next section is the table section. I *think* we can also skip this one? Wasm
 The next section is the memory section. There can be only one memory in Wasm 1.0, so the only useful thing to extract here is the minimum and maxium size of the linear memory. We don't need to track the high boundary. Technically we don't need to track the low boundary either, we can just hardcode like 1 MiB and it'll work fine I guess. So we don't need this section either.
 
 The next section is the global section. This one contains values, so it's finally something we need to parse. The issue is that it contains initializers, which is code. Though the verification section says it must be a *constant* expression, which basically just means it needs to be a single `t.const` instruction. That simplifies things to say the least!
+
+---
+
+Time for the export section. Pretty much the only thing I need to do is find the `_start` symbol.
+
+Next goes the... start section? Except it's absent from my file. What?
+
+Okay, so `_start` is part of the WASI ABI, while the start section is effectively autorun. I guess it can also be interpreted as CRT? I'll treat `_start` as the `main` function and call the start function simply `start`.
