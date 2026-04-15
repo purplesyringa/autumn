@@ -25,10 +25,76 @@ unsigned char* funcs[1024];
 unsigned n_funcs;
 unsigned char memory[2 * 1024 * 1024];
 unsigned long stack[1024];
-unsigned stack_len;
+unsigned long* stack_head = stack;
+
+void eval_until(unsigned char terminator) {
+    while (*parse_p != terminator) {
+        unsigned char opcode = *parse_p++;
+        switch (opcode) {
+        case 0x00:
+            // unreachable
+            __builtin_trap();
+        case 0x01:
+            // nop
+            break;
+        case 0x02:
+            // block
+            parse_p++; // blocktype
+            eval_until(0x0b);
+            break;
+        case 0x03:
+            // loop
+            parse_p++; // blocktype
+            unsigned char *p = parse_p;
+            for (;;) {
+                parse_p = p;
+                eval_until(0x0b);
+            }
+            break;
+        case 0x23:
+            // global.get
+            *stack_head++ = globals[read_uint()];
+            break;
+        case 0x28: {
+            // i32.load
+            read_uint(); // align
+            unsigned offset = read_uint();
+            unsigned address = offset + stack_head[-1];
+            unsigned value = 0;
+            memcpy(&value, memory + address, 4);
+            stack_head[-1] = value;
+            break;
+        }
+        case 0x41:
+            // i32.const
+            *stack_head++ = read_uint();
+            break;
+        case 0x6a: {
+            // i32.add
+            unsigned long b = *--stack_head;
+            stack_head[-1] = (unsigned)(stack_head[-1] + b);
+            break;
+        }
+        default:
+            printf("Unknown opcode 0x%02x\n", opcode);
+            __builtin_trap();
+        }
+    }
+    parse_p++;
+}
 
 void call_func(unsigned funcidx) {
+    parse_p = funcs[funcidx];
 
+    unsigned n_local_groups = read_uint();
+    unsigned n_locals = 0;
+    while (n_local_groups--) {
+        n_locals += read_uint(); // n
+        parse_p++; // valtype
+    }
+
+    unsigned long locals[n_locals];
+    eval_until(0x0b);
 }
 
 int main(int argc, char **argv) {

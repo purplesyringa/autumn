@@ -114,3 +114,38 @@ Hmm, I just realized: how do Wasm programs invoke external functions? I probably
 > The index space for functions, tables, memories and globals includes respective imports declared in the same module. The indices of these imports precede the indices of other definitions in the same index space.
 
 Yeah, it should use continuous numbering.
+
+---
+
+Hopefully now I can interpret code. Shouldn't be too hard.
+
+My basic function is `eval_until(terminator)`, evaluating bytecode from a global pointer until `terminator`. Using a global pointer allows me to just call `read_uint` when necessary, but it does mean I need to be careful to place the pointer carefully at the end of each instruction and before invoking `eval_until` (e.g. in the `loop` instruction).
+
+I think I'll just implement instructions greedily for now and add functionality when necessary.
+
+I should probably enable `-Wall` -- I forget `break` in `switch`..`case` all the time.
+
+Memory accesses are weird:
+
+> The static address offset is added to the dynamic address operand, yielding a 33 bit effective address that is the zero-based index at which the memory is accessed.
+
+So apparently `i32.load` takes an inline static offset, *and* a dynamic argument on the stacak, and sums them together. What I don't get is why I see
+
+```
+(i32.load
+ (i32.add
+  (global.get $GOT.data.internal.__memory_base)
+  (i32.const 1055864)
+ )
+)
+```
+
+in wast then. I would've expected `i32.add` to be inlined into `i32.load` in this case. Maybe that's just how `wasm-dis` renders this?.. That'd be odd, the spec says the text format can use `offset=...` for a fixed offset. Is it perhaps due to different behavior when the addition overflows?
+
+https://github.com/emscripten-core/emscripten/issues/7715 (closed by stale bot)
+
+Here's a relevant PR to Emscripten: https://github.com/emscripten-core/emscripten/pull/7860
+
+Is there an open LLVM issue? https://github.com/llvm/llvm-project/issues/187367
+
+Oh, I see `offset=...` in other places, I guess it's just this specific one that's broken due to a large offset. Okay.
