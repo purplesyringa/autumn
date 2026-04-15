@@ -304,3 +304,7 @@ unsafe { main_thread::set(thread::current_id()) };
 Okay, I get it, no, the loop comes from `ThreadId::new`, which tries to generate a globally unique ID.
 
 Oh, I see. I misimplemented `select`. That makes a lot of sense, now execution continues further.
+
+---
+
+Execution stopped at `call_indirect`. That's the call to `main`! We're pretty close.

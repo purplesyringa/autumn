@@ -117,6 +117,15 @@ void eval_instr() {
         call_func(funcidx);
         break;
     }
+    case 0x11: {
+        // call_indirect
+        read_uint(); // typeidx
+        parse_p++; // 0x00
+        PARSED;
+        unsigned tableidx = *--stack_head;
+        call_func(func_table[tableidx]);
+        break;
+    }
     case 0x1b: {
         // select
         PARSED;
