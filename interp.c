@@ -20,6 +20,7 @@ unsigned char* declared_types[1024];
 unsigned long globals[1024];
 unsigned main_funcidx;
 unsigned start_funcidx = -1;
+unsigned long func_table[1024];
 
 int main(int argc, char **argv) {
     int fd = open(argv[1], O_RDONLY);
@@ -106,6 +107,21 @@ int main(int argc, char **argv) {
         } else if (section_type == 8) {
             // Start section
             start_funcidx = read_uint();
+        } else if (section_type == 9) {
+            // Element section
+            unsigned n_elems = read_uint();
+
+            while (n_elems--) {
+                parse_p++; // 0x00 tableidx
+                parse_p++; // i32.const
+                unsigned offset = read_uint();
+                parse_p++; // end
+                unsigned n_funcidxs = read_uint();
+                printf("%u..%u elems\n", offset, offset + n_funcidxs);
+                while (n_funcidxs--) {
+                    func_table[offset++] = read_uint();
+                }
+            }
         } else {
             parse_p += byte_len;
         }

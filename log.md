@@ -78,3 +78,7 @@ Time for the export section. Pretty much the only thing I need to do is find the
 Next goes the... start section? Except it's absent from my file. What?
 
 Okay, so `_start` is part of the WASI ABI, while the start section is effectively autorun. I guess it can also be interpreted as CRT? I'll treat `_start` as the `main` function and call the start function simply `start`.
+
+---
+
+Element section. It's basically an initializer list for tables. When are tables used? Looks like the (sole) function table is only used for `call_indirect`. So function pointers are indices into the table, I guess. It kinda sucks that it doesn't just use `funcidx` directly, but I guess it makes some sense.
