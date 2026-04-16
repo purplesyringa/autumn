@@ -287,22 +287,38 @@ static void eval_instr() {
     }
     case 0x28: // i32.load
     case 0x29: // i64.load
+    case 0x2c: // i32.load8_s
     case 0x2d: // i32.load8_u
+    case 0x2e: // i32.load16_s
     case 0x2f: // i32.load16_u
+    case 0x30: // i64.load8_s
+    case 0x31: // i64.load8_u
+    case 0x32: // i64.load16_s
+    case 0x33: // i64.load16_u
+    case 0x34: // i64.load32_s
+    case 0x35: // i64.load32_u
     {
         read_uint(); // align
         unsigned offset = read_uint();
         PARSED;
         unsigned address = offset + *stack_head;
-        unsigned long value = 0;
-        unsigned len = (
-            opcode == 0x28 ? 4 :
-            opcode == 0x29 ? 8 :
-            opcode == 0x2d ? 1 :
-            opcode == 0x2f ? 2 :
-            -1U
-        );
-        memcpy(&value, memory + address, len);
+
+        unsigned long value;
+        __builtin_memcpy(&value, memory + address, 8);
+
+        static unsigned char shifts[] = { 32, 0, 56, 56, 48, 48, 56, 56, 48, 48, 32, 32 };
+        unsigned char shift = shifts[opcode - 0x28];
+
+        value <<= shift;
+        if (opcode % 2 == 0) { // signed
+            value = (long)value >> shift;
+            if (opcode < 0x30 && opcode != 0x29) { // 32-bit destination
+                value &= -1U;
+            }
+        } else {
+            value >>= shift;
+        }
+
         *stack_head = value;
         break;
     }
@@ -310,6 +326,9 @@ static void eval_instr() {
     case 0x37: // i64.store
     case 0x3a: // i32.store8
     case 0x3b: // i32.store16
+    case 0x3c: // i64.store8
+    case 0x3d: // i64.store16
+    case 0x3e: // i64.store32
     {
         read_uint(); // align
         unsigned offset = read_uint();
@@ -317,10 +336,10 @@ static void eval_instr() {
         unsigned long value = *stack_head++;
         unsigned address = offset + *stack_head++;
         unsigned len = (
-            opcode == 0x36 ? 4 :
+            opcode == 0x36 || opcode == 0x3e ? 4 :
             opcode == 0x37 ? 8 :
-            opcode == 0x3a ? 1 :
-            opcode == 0x3b ? 2 :
+            opcode == 0x3a || opcode == 0x3c ? 1 :
+            opcode == 0x3b || opcode == 0x3d ? 2 :
             -1U
         );
         memcpy(memory + address, &value, len);
@@ -500,7 +519,7 @@ static void eval_instr() {
         break;
     case 0xc0: // i32.extend8_s
         PARSED;
-        *stack_head = (unsigned long)(int)(char)*stack_head;
+        *stack_head = (unsigned long)(int)(signed char)*stack_head;
         break;
     case 0xfc:
         opcode = *p++;

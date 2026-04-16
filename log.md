@@ -648,3 +648,19 @@ Got down to 4968 bytes. That's not a big improvement, of course, but since I con
 ---
 
 I can't help but notice that for the most part, the only difference between 32-bit and 64-bit handlers is a REX prefix. I think this time it's more useful -- `cmp` was just one instructions, but here the instructions are *everywhere*. And since the exact registers are fixed (`a` needs to be in `rax` for `div` and `b` needs to be in `rcx` for `shl`), I don't have to worry about the REX prefix being trickier to specify. This brings it down to 4720 bytes.
+
+---
+
+Floating-point operations excluded, this leaves just size conversions. It also gives me a chance to optimize out the `memcpy` call in the variable-length loads and fix an unportable cast to `(char)` instead of `(signed char)`.
+
+I'll start with loads and stores. Loads are messy more than tricky, since opcodes don't straightforwardly correspond to sizes. Its kind of hard to hand all the cases the same way: `i32.load` and `i64.load` don't need any zero-extension, while `i64.load32_u` seemingly does, but there's no `movzx r64, r/m32` because it's just a `mov`.
+
+Here's the list of parameters we need to handle:
+
+- Read size: 8, 16, 32, 64.
+- For small reads, sign or zero extension.
+- Sign-extension into `i32` vs into `i64`.
+
+Parametric `shl` + `shr`/`sar` + conditional `mov r32, r32` might do the trick, I guess? That's 4784 bytes.
+
+This leaves `0xa7` to `0xb1`, `0xc1` to `0xc4`.
