@@ -447,38 +447,6 @@ static void eval_instr() {
     {
         PARSED;
 
-#define HANDLERS \
-        X(i32_add, "add %k[b], %k[a]") \
-        X(i32_sub, "sub %k[b], %k[a]") \
-        X(i32_mul, "imul %k[b], %k[a]") \
-        X(i32_div_s, "idiv %k[b]") \
-        X(i32_div_u, "div %k[b]") \
-        X(i32_rem_s, "idiv %k[b]; mov %%edx, %%eax") \
-        X(i32_rem_u, "div %k[b]; mov %%edx, %%eax") \
-        X(i32_and, "and %k[b], %k[a]") \
-        X(i32_or, "or %k[b], %k[a]") \
-        X(i32_xor, "xor %k[b], %k[a]") \
-        X(i32_shl, "shl %b[b], %k[a]") \
-        X(i32_shr_s, "sar %b[b], %k[a]") \
-        X(i32_shr_u, "shr %b[b], %k[a]") \
-        X(i32_rotl, "rol %b[b], %k[a]") \
-        X(i32_rotr, "ror %b[b], %k[a]") \
-        X(i64_add, "add %[b], %[a]") \
-        X(i64_sub, "sub %[b], %[a]") \
-        X(i64_mul, "imul %[b], %[a]") \
-        X(i64_div_s, "idiv %[b]") \
-        X(i64_div_u, "div %[b]") \
-        X(i64_rem_s, "idiv %[b]; mov %%rdx, %%rax") \
-        X(i64_rem_u, "div %[b]; mov %%rdx, %%rax") \
-        X(i64_and, "and %[b], %[a]") \
-        X(i64_or, "or %[b], %[a]") \
-        X(i64_xor, "xor %[b], %[a]") \
-        X(i64_shl, "shl %b[b], %[a]") \
-        X(i64_shr_s, "sar %b[b], %[a]") \
-        X(i64_shr_u, "shr %b[b], %[a]") \
-        X(i64_rotl, "rol %b[b], %[a]") \
-        X(i64_rotr, "ror %b[b], %[a]")
-
         extern unsigned char binop_handlers;
 
         unsigned long b = *stack_head++;
@@ -495,16 +463,42 @@ static void eval_instr() {
             "call *%[handler];"
             ".pushsection .text.op;"
             "binop_handlers:"
-#define X(name, code) #name ": " code "; ret;"
-            HANDLERS
-#undef X
+#define BINOP(code) code "; ret;"
+            BINOP("add %k[b], %k[a]")
+            BINOP("sub %k[b], %k[a]")
+            BINOP("imul %k[b], %k[a]")
+            BINOP("idiv %k[b]")
+            BINOP("div %k[b]")
+            BINOP("idiv %k[b]; mov %%edx, %%eax")
+            BINOP("div %k[b]; mov %%edx, %%eax")
+            BINOP("and %k[b], %k[a]")
+            BINOP("or %k[b], %k[a]")
+            BINOP("xor %k[b], %k[a]")
+            BINOP("shl %b[b], %k[a]")
+            BINOP("sar %b[b], %k[a]")
+            BINOP("shr %b[b], %k[a]")
+            BINOP("rol %b[b], %k[a]")
+            BINOP("ror %b[b], %k[a]")
+            BINOP("add %[b], %[a]")
+            BINOP("sub %[b], %[a]")
+            BINOP("imul %[b], %[a]")
+            BINOP("idiv %[b]")
+            BINOP("div %[b]")
+            BINOP("idiv %[b]; mov %%rdx, %%rax")
+            BINOP("div %[b]; mov %%rdx, %%rax")
+            BINOP("and %[b], %[a]")
+            BINOP("or %[b], %[a]")
+            BINOP("xor %[b], %[a]")
+            BINOP("shl %b[b], %[a]")
+            BINOP("sar %b[b], %[a]")
+            BINOP("shr %b[b], %[a]")
+            BINOP("rol %b[b], %[a]")
+            BINOP("ror %b[b], %[a]")
             ".popsection"
             : [a]"+a"(a), "+d"(zero) // specific register and zero for `div`
             : [b]"c"(b), [handler]"r"(handler) // specific register for shifts
             : "flags"
         );
-
-#undef HANDLERS
 
         *stack_head = a;
         break;
