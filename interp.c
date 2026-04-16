@@ -332,7 +332,15 @@ static void eval_instr() {
         extern unsigned char unop_handlers;
 
         unsigned char *handler = &unop_handlers;
-        while (*handler++ != opcode) {
+        for (;;) {
+            if (opcode == *handler) {
+                handler += 3;
+                break;
+            } else if (opcode == handler[1]) {
+                handler += 2;
+                break;
+            }
+            handler += 2;
             while (*handler++ != 0xc3); // ret
         }
 
@@ -340,26 +348,16 @@ static void eval_instr() {
             "call *%[handler];"
             ".pushsection .text.op;"
             "unop_handlers:"
-            ".byte 0x45; jmp 1f; ret;"
-            ".byte 0x50; 1: test %0, %0; mov $0, %k0; sete %b0; ret;"
-            ".byte 0x67; lzcnt %k0, %k0; ret;"
-            ".byte 0x68; tzcnt %k0, %k0; ret;"
-            ".byte 0x69; jmp 1f; ret;"
-            ".byte 0x7b; 1: popcnt %0, %0; ret;"
-            ".byte 0x79; lzcnt %0, %0; ret;"
-            ".byte 0x7a; tzcnt %0, %0; ret;"
-            ".byte 0x8b; btr $31, %k0; ret;"
-            ".byte 0x8c; btc $31, %k0; ret;"
-            ".byte 0x99; btr $63, %0; ret;"
-            ".byte 0x9a; btc $63, %0; ret;"
-            ".byte 0xa7; jmp 1f; ret;"
-            ".byte 0xad; 1: mov %k0, %k0; ret;"
-            ".byte 0xac; jmp 1f; ret;"
-            ".byte 0xc4; 1: movsx %k0, %0; ret;"
-            ".byte 0xc0; 1: movsx %b0, %k0; ret;"
-            ".byte 0xc1; 1: movsx %w0, %k0; ret;"
-            ".byte 0xc2; 1: movsx %b0, %0; ret;"
-            ".byte 0xc3; 1: movsx %w0, %0; ret;"
+            ".byte 0x45, 0x50; test %0, %0; mov $0, %k0; sete %b0; ret;"
+            ".byte 0x67, 0x79; lzcnt %0, %0; ret;"
+            ".byte 0x68, 0x7a; tzcnt %0, %0; ret;"
+            ".byte 0x69, 0x7b; popcnt %0, %0; ret;"
+            ".byte 0x8b, 0x99; btr $63, %0; ret;"
+            ".byte 0x8c, 0x9a; btc $63, %0; ret;"
+            ".byte 0xa7, 0xad; nop; mov %k0, %k0; ret;"
+            ".byte 0xac, 0xc4; nop; movsx %k0, %0; ret;"
+            ".byte 0xc0, 0xc2; movsx %b0, %0; ret;"
+            ".byte 0xc1, 0xc3; movsx %w0, %0; ret;" // needs to be last because it contains 0xc3
             ".popsection"
             : "+a"(*stack_head) // specific register to make sure 0xc3 doesn't appear by accident
             : [handler]"r"(handler)
