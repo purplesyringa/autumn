@@ -842,3 +842,41 @@ While working with the optable, I found some other avenues for optimization due 
 ---
 
 Thought to make `stack_head` a register while I'm at it. I still think it should be `rsp`, but I'm pretty sure I'll have to work on the C version for quite a while, so let's make it more tenable while it lasts. 3632 bytes.
+
+---
+
+Time for floating-point arithmetic -- hopefully there's enough space for that due to recent changes.
+
+I can probably start with unary operations. I already implement `f64.abs` because it can be done on integers, but not others, like:
+
+- `f64.neg`
+- `f64.ceil`
+- `f64.floor`
+- `f64.trunc`
+- `f64.nearest`
+- `f64.sqrt`
+
+Rounding can be done with `roundsd`.
+
+> The immediate operand specifies control fields for the rounding operation, three bit fields are defined and shown in Figure 1-24. Bit 3 of the immediate byte controls processor behavior for a precision exception, bit 2 selects the source of rounding mode control. Bits 1:0 specify a non-sticky rounding-mode value (Table 1-18 lists the encoded values for rounding-mode field).
+
+...where:
+
+- Round to even is 00 (`f64.nearest`)
+- Round downward is 01 (`f64.floor`)
+- Round upward is 10 (`f64.ceil`)
+- Round toward zero is 11 (`f64.trunc`)
+
+We have a choice:
+
+- Either bit 2 is `0`, denoting a rounding mode taken from the instruction, and we patch the instruction as usual.
+- ...or it's `1` and the rounding mode is taken from the FP context.
+
+If we use the second way, we need to set MXCSR to `0x1f80 | (rounding_mode << 13)`. That's a write to stack and `ldmxcsr`. If we use the first way, we need to patch only one byte and don't need any operation afterwards. I think patching code is better, especially since we'd have to return the values back before normal floating-point arithmetic.
+
+On that note, though... how is `sNaN` handled? Wasm says there's no difference between `sNaN` and `qNaN`. Does x86 behave the same by default? I think it does -- the default value of MXCSR, `0x1f80`, has all the mask bits set. So that shouldn't be an issue. Cool.
+
+Implemented rounding for both `f32` and `f64`, 3712 bytes. This leaves:
+
+- `f64.abs`, `f64.neg`, `f64.sqrt`
+- `f32.abs`, `f32.neg`, `f32.sqrt`

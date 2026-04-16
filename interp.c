@@ -504,6 +504,37 @@ static void eval_instr() {
         PARSED;
         *stack_head &= (-1ULL) >> 1;
         break;
+    case 0x8d: // f32.ceil
+    case 0x8e: // f32.floor
+    case 0x8f: // f32.trunc
+    case 0x90: // f32.nearest
+    case 0x9b: // f64.ceil
+    case 0x9c: // f64.floor
+    case 0x9d: // f64.trunc
+    case 0x9e: // f64.nearest
+    {
+        PARSED;
+
+        unsigned char roundsd_size_byte = 0x0a;
+        if (opcode >= 0x9b) { // f64
+            roundsd_size_byte++;
+            opcode -= 0x9b - 0x8d;
+        }
+
+        unsigned imm8 = (0b00110110 >> ((opcode - 0x8d) * 2)) & 3;
+        __m128i a;
+        asm (
+            "mov %2, 1f + 5(%%rip);"
+            "mov %3, 1f + 7(%%rip);"
+            "xorps %0, %0;"
+            "1:"
+            "roundsd $0, %1, %0;"
+            "movq %0, %1;"
+            : "=x"(a), "+m"(*stack_head)
+            : "r"(roundsd_size_byte), "r"(imm8)
+        );
+        break;
+    }
     case 0xa7: // i32.wrap_i64
     case 0xac: // i64.extend_i32_s
     case 0xad: // i64.extend_i32_u
