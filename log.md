@@ -938,3 +938,7 @@ Applied a similar trick to unops, 3856 bytes.
 ---
 
 Replaced a manual search loop with `repne scasb`, 3848 bytes.
+
+---
+
+Found a bug in `impl_read_int` -- varints containing more than 64 bits were parsed wrong, even if all bits above the 64th one were zero. Luckily the fix didn't increase code usage, since I optimized `impl_read_int` a bit prior to the fix.

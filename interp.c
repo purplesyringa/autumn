@@ -42,12 +42,16 @@ static long syscall3(long sysno, long a, long b, long c) {
 
 __attribute__((noinline))
 static unsigned long impl_read_int(_Bool is_signed) {
-    int shift = 64;
+    unsigned char shift = 64;
     unsigned long out = 0;
+    unsigned char c;
     do {
-        out = (out >> 7) | ((unsigned long)(*p & 0x7f) << (64 - 7));
-        shift -= 7;
-    } while (*p++ & 0x80);
+        c = *p;
+        p++;
+        unsigned char bits = shift < 7 ? shift : 7;
+        asm ("shrd %2, %q1, %0" : "+r"(out) : "r"(c), "c"(bits) : "flags");
+        shift -= bits;
+    } while (c & 0x80);
     if (is_signed) {
         out = (long)out >> shift;
     } else {
