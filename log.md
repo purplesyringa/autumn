@@ -589,3 +589,38 @@ I think I can't optimize this further with C alone. But before rewriting at leas
 - Floating-point conversions: `0xb2` to `0xbf`, `0xfc 0x00` to `0xfc 0x07`.
 
 Most of them are present in Wasm 1.0 as well, so we can't really cheat that way. We can just refuse to support the various WasmGC features, vector extensions, and dynamic allocations, though.
+
+---
+
+So I woke up and, unsurprisingly, forgot what I was doing. I think my idea was to finish implementing some set of instructions to get it to orthogonality, and then use bit flags or similar ways to remove the exponential blow-up. Hopefully this can let me increase feature support without increasing size much.
+
+Implemented all integer comparisons, code size is now 4800. But now that they work, I can think of a couple optimizations:
+
+- I can sign-extend `int` to `long` when performing signed `i32` comparison, so that I don't have to worry about data size anymore. This brings the size down to 4784.
+- Now that all comparisons are 64-bit, the result if a comparison can be determined from the flags set by a single `cmp` instruction. I'm confused on how to parse the flags without tasting a ton of space, though.
+
+Now that I think about it, what I really need is a `setcc` with a dynamic parameter. I don't think x86 supports dynamic comparison like that. Hmm. I could just write self-modifying code, it's not like I need W^X, and I'm writing in x86-64 so I don't need to reset code cache. It's going to be slow, but who cares?
+
+https://www.felixcloutier.com/x86/setcc
+
+So the instruction looks like `0f <...> r/m`, and we need to patch the second byte.
+
+Man, I can never remember the AT&T syntax. Right, `[rel a]` is written as `a(%rip)`. https://stackoverflow.com/questions/54745872/how-do-rip-relative-variable-references-like-rip-a-in-x86-64-gas-intel-sy Now I just need to make code pages rwx. They already are in `interp-small`, but not in `interp-debug`, which I'd like to use. Hmm.
+
+Eugh. This is not as trivial as I expected it to be. `ld -N` disables dynamic linking, but I need it for ASAN. `objcopy --set-section-flags` can make the `.text` section writeable post-build, but it doesn't mark the corresponding segment as writeable. Can I maybe emit an assembler directive?
+
+Tried
+
+```
+.section .text, \"awx\", @progbits;
+```
+
+but got "Warning: ignoring changed section attributes for .text" followed by assembler errors. I can't even use a linker script for this... I mean, I can, but it's likely not going to look simple. And I need to support both `-static` and shared builds. Eugh!
+
+Okay, so I just patched the bit by hand with a small C script. `<elf.h>` is cool. Now I just need to deal with the `ud2`... right, I swapped the parameters to `cmp` and also made a typo.
+
+4624 bytes after replacing the ternary with an array literal. That's smaller than original! Hopefully this trend continues.
+
+This leaves:
+
+- Various comparisons: `0x5b` to `0x66`.

@@ -335,13 +335,14 @@ static void eval_instr() {
         break;
     }
     case 0x45: // i32.eqz
+    case 0x50: // i64.eqz
     case 0x67: // i32.clz
     case 0x68: // i32.ctz
     {
         PARSED;
         unsigned long x = *stack_head;
         x = (
-            opcode == 0x45 ? x == 0 :
+            opcode == 0x45 || opcode == 0x50 ? x == 0 :
             opcode == 0x67 ? __builtin_clzg(x, 32) :
             opcode == 0x68 ? __builtin_ctzg(x, 32) :
             -1UL
@@ -355,32 +356,60 @@ static void eval_instr() {
     case 0x49: // i32.lt_u
     case 0x4a: // i32.gt_s
     case 0x4b: // i32.gt_u
+    case 0x4c: // i32.le_s
     case 0x4d: // i32.le_u
+    case 0x4e: // i32.ge_s
     case 0x4f: // i32.ge_u
     case 0x51: // i64.eq
     case 0x52: // i64.ne
-    case 0x6c: // i32.mul
+    case 0x53: // i64.lt_s
+    case 0x54: // i64.lt_u
+    case 0x55: // i64.gt_s
+    case 0x56: // i64.gt_u
+    case 0x57: // i64.le_s
+    case 0x58: // i64.le_u
+    case 0x59: // i64.ge_s
+    case 0x5a: // i64.ge_u
     {
         PARSED;
         unsigned long b = *stack_head++;
         unsigned long a = *stack_head;
-        _Bool cond = (
-            opcode == 0x46 || opcode == 0x51 ? a == b :
-            opcode == 0x47 || opcode == 0x52 ? a != b :
-            opcode == 0x48 ? (int)a < (int)b :
-            opcode == 0x49 ? a < b :
-            opcode == 0x4a ? (int)a > (int)b :
-            opcode == 0x4b ? a > b :
-            opcode == 0x4d ? a <= b :
-            opcode == 0x4f ? a >= b :
-            opcode == 0x6c ? (unsigned)(a * b) :
-            0
+        if (opcode < 0x51) { // i32
+            if (opcode % 2 == 0) { // signed or i32.eq
+                // sign-extend
+                a = (long)(int)a;
+                b = (long)(int)b;
+            }
+            opcode += 0x51 - 0x46;
+        }
+        static unsigned char opcode_bytes[] = {
+            0x94, // sete
+            0x95, // setne
+            0x9c, // setl
+            0x92, // setb
+            0x9f, // setg
+            0x97, // seta
+            0x9e, // setle
+            0x96, // setbe
+            0x9d, // setge
+            0x93, // setae
+        };
+        _Bool cond;
+        asm (
+            "cmp %2, %1;"
+            "mov %3, 1f + 1(%%rip);"
+            "1:"
+            "setb %0"
+            : "=r"(cond)
+            : "r"(a), "r"(b), "r"(opcode_bytes[opcode - 0x51])
+            : "flags"
         );
         *stack_head = cond;
         break;
     }
     case 0x6a: // i32.add
     case 0x6b: // i32.sub
+    case 0x6c: // i32.mul
     case 0x71: // i32.and
     case 0x72: // i32.or
     case 0x73: // i32.xor
@@ -400,6 +429,7 @@ static void eval_instr() {
         unsigned long value = (
             opcode == 0x6a ? (unsigned)(a + b) :
             opcode == 0x6b ? (unsigned)(a - b) :
+            opcode == 0x6c ? (unsigned)(a * b) :
             opcode == 0x71 || opcode == 0x83 ? a & b :
             opcode == 0x72 || opcode == 0x84 ? a | b :
             opcode == 0x73 ? a ^ b :
