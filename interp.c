@@ -285,6 +285,8 @@ static void eval_instr() {
     }
     case 0x28: // i32.load
     case 0x29: // i64.load
+    case 0x2a: // f32.load
+    case 0x2b: // f64.load
     case 0x2c: // i32.load8_s
     case 0x2d: // i32.load8_u
     case 0x2e: // i32.load16_s
@@ -304,15 +306,15 @@ static void eval_instr() {
         unsigned long value;
         __builtin_memcpy(&value, memory + address, 8);
 
-        unsigned char shift = (0x3830380000003020U >> (opcode * 4 & 0x38)) & 0xff;
+        unsigned char shift = (0x3038000000203038U >> ((opcode * 4) & 0x38)) & 0xff;
 
         value <<= shift;
-        if (opcode % 2 == 0) { // signed
+        if (opcode % 2 == 0) { // signed or pure 32-bit
             value = (long)value >> shift;
-            if (opcode < 0x30 && opcode != 0x29) { // 32-bit destination
+            if (opcode < 0x30) { // 32-bit destination
                 value &= -1U;
             }
-        } else {
+        } else { // unsigned or pure 64-bit
             value >>= shift;
         }
 

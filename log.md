@@ -766,3 +766,16 @@ Left unimplemented: `0xa8` to `0xab`, `0xae` to `0xb1`.
 ---
 
 This leaves memory and floating-point. Let's start with memory, that sounds simpler. We need to implement `memory.size` and `memory.grow`. I guess we can just simulate a fixed-sized array? Just need to remember not to allow the machine to go out out-of-bounds due to the fixed-size access in `*.load*` by adding a few guard bytes at the end of `memory`. 4016 bytes, very simple.
+
+---
+
+Floating-point is really scary. That's a large instruction space... we barely fit in 4 KiB (that's amazing btw), but floating-point will likely make this feat impossible. We can try to touch on some basics, though.
+
+- Memory accesses: `0x2a`, `0x2b`, `0x43`, `0x44`.
+- Comparisons: `0x5b` to `0x66`.
+- Arithmetic: `0x8b` to `0x98`, `0x9a` to `0xa6`.
+- Conversions: `0xa8` to `0xab`, `0xae` to `0xbf`, `0xfc 0x00` to `0xfc 0x07`.
+
+Let's start with loads. I played around with it and realized that loads were apparently broken?.. The constant is wrong, but hello-world didn't catch that. Huh. The conditionals were also off, though it didn't matter. Basically, with our current semantics, `i32.load` and `f32.load` are interpreted as the non-existent `i32.load64_s`, so we sign-extend the 64-bit value to a 64-bit value and then truncate the top 32 bits. This is cursed, but it's optimal. `i64.load` and `f64.load` are treated as `i64.load64_u`, which is fine.
+
+This didn't increase the code because I only needed to change the constant.
