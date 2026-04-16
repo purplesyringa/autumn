@@ -908,3 +908,21 @@ I'm getting the feeling I might just be able to fit floating-point arithmetic in
 I'll focus on simple binary operators for now. I have a feeling `min`/`max` might be complex due to `NaN` handling. I was wondering where `rem` was, but I guess it has a valid userland implementation based on floored dividion and FMA... but I don't think either is present in Wasm, at least in Wasm 1.0. Anyway.
 
 Implemented `add`, `sub`, `mul`, `div`, got 3784 bytes.
+
+---
+
+I don't think SSE has `copysign`. And it's easy to implement as a binary operation, so that's the likely reason. Clang lowers `copysign` in a somewhat confusing manner; I don't get why it doesn't just use `blend`.
+
+Oh, right, `blend` is not bit-granular. https://stackoverflow.com/questions/57870896/writing-a-portable-sse-avx-version-of-stdcopysign#comment102167961_57870896 Not that it'd work with integers anyway.
+
+I initially wanted to use the integer binop infrastructure for `copysign`, but it doesn't quite work, since `copysign` requires multiple instructions and can't be patched for different sizes easily. Its opcode is also far from other instructions. So it needs to be a separate instr handler.
+
+Yuki designed a clever implementation that doesn't need patching for different sizes and just receives a flag in `cl` (1 vs 33):
+
+```
+shl rax, cl
+shl rdx, cl
+rcr rax, cl
+```
+
+3888 bytes.

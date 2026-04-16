@@ -612,6 +612,21 @@ static void eval_instr() {
         );
         break;
     }
+    case 0x98: // f32.copysign
+    case 0xa6: // f64.copysign
+    {
+        PARSED;
+        unsigned long b = *stack_head++;
+        asm (
+            "shl %[c], %[a];"
+            "shl %[c], %[b];"
+            "rcr %[c], %[a];"
+            : [a]"+r"(*stack_head), [b]"+r"(b)
+            : [c]"c"((unsigned char)(opcode == 0x98 ? 33 : 1))
+            : "flags"
+        );
+        break;
+    }
     case 0xfc:
         opcode = *p++;
         switch (opcode) {
