@@ -497,22 +497,21 @@ static void eval_instr() {
             "call *%[handler];"
             ".pushsection .text.op;"
             "binop_handlers:"
-#define BINOP(code) code "; ret;"
-            BINOP("add %[b], %[a]")
-            BINOP("sub %[b], %[a]")
-            BINOP("imul %[b], %[a]")
-            BINOP("idiv %[b]")
-            BINOP("div %[b]")
-            BINOP("idiv %[b]; mov %%rdx, %%rax")
-            BINOP("div %[b]; mov %%rdx, %%rax")
-            BINOP("and %[b], %[a]")
-            BINOP("or %[b], %[a]")
-            BINOP("xor %[b], %[a]")
-            BINOP("shl %b[b], %[a]")
-            BINOP("sar %b[b], %[a]")
-            BINOP("shr %b[b], %[a]")
-            BINOP("rol %b[b], %[a]")
-            BINOP("ror %b[b], %[a]")
+            "add %[b], %[a]; ret;"
+            "sub %[b], %[a]; ret;"
+            "imul %[b], %[a]; ret;"
+            "idiv %[b]; ret;"
+            "div %[b]; ret;"
+            "idiv %[b]; mov %%rdx, %%rax; ret;"
+            "div %[b]; mov %%rdx, %%rax; ret;"
+            "and %[b], %[a]; ret;"
+            "or %[b], %[a]; ret;"
+            "xor %[b], %[a]; ret;"
+            "shl %b[b], %[a]; ret;"
+            "sar %b[b], %[a]; ret;"
+            "shr %b[b], %[a]; ret;"
+            "rol %b[b], %[a]; ret;"
+            "ror %b[b], %[a]; ret;"
             ".popsection"
             : [a]"+a"(a), "+d"(zero) // specific register and zero for `div`
             : [b]"c"(b), [handler]"r"(handler) // specific register for shifts
