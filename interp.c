@@ -110,6 +110,7 @@ unsigned break_level;
 
 static void call_func(unsigned funcidx);
 
+__attribute__((noinline))
 static void eval_instr() {
 #define PARSED if (break_level) break
 
