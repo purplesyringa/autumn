@@ -838,3 +838,7 @@ So I extracted almost everything I could to single-byte args, and now I'm at 421
 ---
 
 While working with the optable, I found some other avenues for optimization due to similarity between some control opcodes. This brings the size down from 4040 bytes to 3864 bytes.
+
+---
+
+Thought to make `stack_head` a register while I'm at it. I still think it should be `rsp`, but I'm pretty sure I'll have to work on the C version for quite a while, so let's make it more tenable while it lasts. 3632 bytes.

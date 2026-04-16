@@ -76,7 +76,7 @@ struct func_info funcs[1024];
 unsigned n_funcs;
 unsigned char memory[2 * 1024 * 1024];
 unsigned long stack[1024];
-unsigned long *stack_head = stack + sizeof(stack) / sizeof(stack[0]);
+register unsigned long *stack_head asm ("r13");
 unsigned long locals_stack[1024];
 unsigned long *locals = locals_stack + sizeof(locals_stack) / sizeof(locals_stack[0]);
 
@@ -773,6 +773,7 @@ int main(int argc, char **argv) {
     }
 
     p = NULL;
+    stack_head = stack + sizeof(stack) / sizeof(stack[0]);
     call_func(main_funcidx);
     if (start_funcidx != (unsigned)-1) {
         call_func(start_funcidx);
