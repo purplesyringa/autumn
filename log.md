@@ -880,3 +880,9 @@ Implemented rounding for both `f32` and `f64`, 3712 bytes. This leaves:
 
 - `f64.abs`, `f64.neg`, `f64.sqrt`
 - `f32.abs`, `f32.neg`, `f32.sqrt`
+
+---
+
+`f64.sqrt` is just `sqrtsd`. I don't know how to implement this well -- it's very similar to `roundsd` in spirit. When implemented as a separate instruction set, it bumps size to 3816 bytes. Most of that increase seems to be due to routing execution to the right place, rather than the implementation itself.
+
+It is kind of close to rounding, though... I can try merging them. That results in 3760 bytes. I guess that'll have to do, though I really don't like having to do a ton of branching.

@@ -500,41 +500,55 @@ static void eval_instr() {
         *stack_head = a;
         break;
     }
-    case 0x99: // f64.abs
-        PARSED;
-        *stack_head &= (-1ULL) >> 1;
-        break;
     case 0x8d: // f32.ceil
     case 0x8e: // f32.floor
     case 0x8f: // f32.trunc
     case 0x90: // f32.nearest
+    case 0x91: // f32.sqrt
     case 0x9b: // f64.ceil
     case 0x9c: // f64.floor
     case 0x9d: // f64.trunc
     case 0x9e: // f64.nearest
+    case 0x9f: // f64.sqrt
     {
         PARSED;
 
-        unsigned char roundsd_size_byte = 0x0a;
-        if (opcode >= 0x9b) { // f64
-            roundsd_size_byte++;
+        _Bool is_f64 = opcode >= 0x9b;
+        if (is_f64) {
             opcode -= 0x9b - 0x8d;
         }
 
-        unsigned imm8 = (0b00110110 >> ((opcode - 0x8d) * 2)) & 3;
+        char *handler;
+        if (opcode != 0x91) {
+            // rounding
+            extern char op_round[];
+            handler = op_round;
+            handler[5] = 0x0a + is_f64;
+            handler[7] = (0b00110110 >> ((opcode - 0x8d) * 2)) & 3;
+        } else {
+            extern char op_sqrt[];
+            handler = op_sqrt;
+            *handler = 0xf3 - is_f64;
+        }
+
         __m128i a;
         asm (
-            "mov %2, 1f + 5(%%rip);"
-            "mov %3, 1f + 7(%%rip);"
             "xorps %0, %0;"
-            "1:"
-            "roundsd $0, %1, %0;"
+            "call *%[handler];"
             "movq %0, %1;"
+            ".pushsection .text.op;"
+            "op_round: roundsd $0, %1, %0; ret;"
+            "op_sqrt: sqrtsd %1, %0; ret;"
+            ".popsection"
             : "=x"(a), "+m"(*stack_head)
-            : "r"(roundsd_size_byte), "r"(imm8)
+            : [handler]"r"(handler)
         );
         break;
     }
+    case 0x99: // f64.abs
+        PARSED;
+        *stack_head &= (-1ULL) >> 1;
+        break;
     case 0xa7: // i32.wrap_i64
     case 0xac: // i64.extend_i32_s
     case 0xad: // i64.extend_i32_u
