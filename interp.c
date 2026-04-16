@@ -588,7 +588,7 @@ static void eval_instr() {
             "op_round: roundsd $0, %1, %0; ret;"
             "op_sqrt: sqrtsd %1, %0; ret;"
             ".popsection"
-            : "=x"(a), "+m"(*stack_head)
+            : "=&x"(a), "+m"(*stack_head)
             : [handler]"r"(handler)
         );
         break;
