@@ -40,32 +40,37 @@ static long syscall3(long sysno, long a, long b, long c) {
 
 #define SCASB(ptr, count, value) asm ("repne scasb" : "+D"(ptr), "+c"(count) : "a"((unsigned char)value) : "flags");
 
+struct read_int_output {
+    unsigned long value;
+    unsigned char shift;
+};
+
 __attribute__((noinline))
-static unsigned long impl_read_int(_Bool is_signed) {
+static struct read_int_output impl_read_int() {
     unsigned char shift = 64;
-    unsigned long out = 0;
+    unsigned long value = 0;
     unsigned char c;
     do {
         c = *p;
         p++;
         unsigned char bits = shift < 7 ? shift : 7;
-        asm ("shrd %2, %q1, %0" : "+r"(out) : "r"(c), "c"(bits) : "flags");
+        asm ("shrd %2, %q1, %0" : "+r"(value) : "r"(c), "c"(bits) : "flags");
         shift -= bits;
     } while (c & 0x80);
-    if (is_signed) {
-        out = (long)out >> shift;
-    } else {
-        out >>= shift;
-    }
-    return out;
+    return (struct read_int_output) {
+        .value = value,
+        .shift = shift,
+    };
 }
 
 static unsigned long read_uint() {
-    return impl_read_int(0);
+    struct read_int_output out = impl_read_int();
+    return out.value >> out.shift;
 }
 
 static long read_sint() {
-    return impl_read_int(1);
+    struct read_int_output out = impl_read_int();
+    return (long)out.value >> out.shift;
 }
 
 struct func_info {
