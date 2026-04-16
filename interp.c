@@ -328,27 +328,43 @@ static void eval_instr() {
     case 0xc4: // i64.extend32_s
     {
         PARSED;
-        unsigned long x = *stack_head;
-        x = (
-            opcode == 0x45 || opcode == 0x50 ? x == 0 :
-            opcode == 0x67 ? __builtin_clzg(x, 32) :
-            opcode == 0x68 ? __builtin_ctzg(x, 32) :
-            opcode == 0x69 || opcode == 0x7b ? __builtin_popcount(x) :
-            opcode == 0x79 ? __builtin_clzg(x, 64) :
-            opcode == 0x7a ? __builtin_ctzg(x, 64) :
-            opcode == 0x8b ? x & (-1U) >> 1 :
-            opcode == 0x8c ? x ^ (1U << 31) :
-            opcode == 0x99 ? x & (-1UL) >> 1 :
-            opcode == 0x9a ? x ^ (1UL << 63) :
-            opcode == 0xa7 || opcode == 0xad ? (unsigned)x :
-            opcode == 0xac || opcode == 0xc4 ? (unsigned long)(long)(int)x :
-            opcode == 0xc0 ? (unsigned int)(int)(signed char)x :
-            opcode == 0xc1 ? (unsigned int)(int)(short)x :
-            opcode == 0xc2 ? (unsigned long)(long)(signed char)x :
-            opcode == 0xc3 ? (unsigned long)(long)(short)x :
-            -1U
+
+        extern unsigned char unop_handlers;
+
+        unsigned char *handler = &unop_handlers;
+        while (*handler++ != opcode) {
+            while (*handler++ != 0xc3); // ret
+        }
+
+        asm volatile (
+            "call *%[handler];"
+            ".pushsection .text.op;"
+            "unop_handlers:"
+            ".byte 0x45; jmp 1f; ret;"
+            ".byte 0x50; 1: test %0, %0; mov $0, %k0; sete %b0; ret;"
+            ".byte 0x67; lzcnt %k0, %k0; ret;"
+            ".byte 0x68; tzcnt %k0, %k0; ret;"
+            ".byte 0x69; jmp 1f; ret;"
+            ".byte 0x7b; 1: popcnt %0, %0; ret;"
+            ".byte 0x79; lzcnt %0, %0; ret;"
+            ".byte 0x7a; tzcnt %0, %0; ret;"
+            ".byte 0x8b; btr $31, %k0; ret;"
+            ".byte 0x8c; btc $31, %k0; ret;"
+            ".byte 0x99; btr $63, %0; ret;"
+            ".byte 0x9a; btc $63, %0; ret;"
+            ".byte 0xa7; jmp 1f; ret;"
+            ".byte 0xad; 1: mov %k0, %k0; ret;"
+            ".byte 0xac; jmp 1f; ret;"
+            ".byte 0xc4; 1: movsx %k0, %0; ret;"
+            ".byte 0xc0; 1: movsx %b0, %k0; ret;"
+            ".byte 0xc1; 1: movsx %w0, %k0; ret;"
+            ".byte 0xc2; 1: movsx %b0, %0; ret;"
+            ".byte 0xc3; 1: movsx %w0, %0; ret;"
+            ".popsection"
+            : "+a"(*stack_head) // specific register to make sure 0xc3 doesn't appear by accident
+            : [handler]"r"(handler)
+            : "flags"
         );
-        *stack_head = x;
         break;
     }
     case 0x46: // i32.eq

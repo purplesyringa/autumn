@@ -892,3 +892,11 @@ It is kind of close to rounding, though... I can try merging them. That results 
 Does SSE simply not support negation and absolutes? Clang lowers both to bit operations. I guess this simplifies things a little -- the choice between implementing these ops on integers vs floats is already done for me. 3816 bytes.
 
 While we're at it, I might as well merge the two groups of unary operators together -- misc integer arithmetic (like `i32.popcnt`) and size extension (like `i32.extend16_s`). That's 3776 bytes.
+
+---
+
+The unary op handling has grown in size significantly. I'd love to use the same approach as with binary operators (`call`ing thunks, counting `ret`s instead of using a jump table), but the opcodes here are very far from each other, so that doesn't work. But I can at least move the ternary out to a separate function so that it can use `ret`.
+
+That worsened it. Due to the calling convention, I'm assuming? This isn't Clang, though, so there's no `preserve_none`. Inline `asm` it is then. And I think I can kinda use a flat key-value map for opcode implementations.
+
+It's a little cursed, but it's now 3664 bytes.
