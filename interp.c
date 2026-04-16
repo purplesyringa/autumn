@@ -8,8 +8,6 @@
 unsigned char module_bytes[1024 * 1024];
 register unsigned char *p asm ("r12");
 
-int memcmp(const void *, const void *, size_t);
-
 static void copy_forward(void *dst, const void *src, size_t n) {
     asm volatile ("rep movsb" : "+D"(dst), "+S"(src), "+c"(n) : : "memory");
 }
@@ -653,8 +651,11 @@ int main(int argc, char **argv) {
                 unsigned name_len = read_uint();
                 // printf("import %.*s\n", name_len, p);
 
+                unsigned long name;
+                __builtin_memcpy(&name, p, 8);
+
                 void (*func)() = NULL;
-                if (name_len == 8 && memcmp(p, "fd_write", 8) == 0) {
+                if (name_len == 8 && name == 0x65746972775f6466 /* fd_write */) {
                     func = fd_write;
                 }
                 funcs[n_funcs++] = (struct func_info){
@@ -709,7 +710,9 @@ int main(int argc, char **argv) {
             for (unsigned i = 0; i < n_exports; i++) {
                 unsigned name_len = read_uint();
                 // printf("export %.*s\n", name_len, p);
-                _Bool is_start = name_len == 6 && memcmp(p, "_start", 6) == 0;
+                unsigned long name;
+                __builtin_memcpy(&name, p, 8);
+                _Bool is_start = name_len == 6 && (name & 0xffffffffffff) == 0x74726174735f /* _start */;
                 p += name_len;
                 p++; // exportdesc variant
                 unsigned index = read_uint(); // exportdesc index

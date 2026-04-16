@@ -663,4 +663,26 @@ Here's the list of parameters we need to handle:
 
 Parametric `shl` + `shr`/`sar` + conditional `mov r32, r32` might do the trick, I guess? That's 4784 bytes.
 
+---
+
+I do wonder, though. Currently, my ABI is that 32-bit integers are always represented in 64-bit storage with the top bits zeroed. Allowing garbage in the top bits would simplify loading. Do I actually rely on this anywhere?
+
+Oh, of course I do -- in places like `br_if`, which receive `i32`. Nevermind then.
+
+But I can still do something cool by placing in the top 2 bits of the shift, which `shl`/`shr` ignore. I'm thinking about placing the info about the bitness there. If I can carefully sign-extend it, maybe I can use it as a bitmask of sorts to simplify this condition:
+
+```c
+if (opcode < 0x30 && opcode != 0x29) { // 32-bit destination
+    value &= -1U;
+}
+```
+
+Didn't work out, unfortunately. Maybe GCC is just bad. I tried using Clang, but it said
+
+> error: register 'r12' unsuitable for global register variables on this target
+
+...and it seems like Clang simply doesn't support this feature: https://clang.llvm.org/docs/UsersManual.html#gcc-extensions-not-implemented-yet. I tried removing the `register` annotation, but Clang still produced a significantly larger binary than GCC, even with `-falign-loops=1`.
+
+I'd also like to try `-Os`, but it wants me to provide `memcmp`, even with `-ffreestanding` and `__builtin_memcmp`. I use `memcmp` to compare with `_start` and `fd_write`, but I can just emit an 8-byte write and compare constants, I guess. Somehow that's an improvement even without `-Os` (4752 bytes). And with `-Os`, it's 3952 bytes! Wow. `-Oz` is slightly better (3896 bytes), but I'll keep using `-Os` for now to keep the disassembly readable.
+
 This leaves `0xa7` to `0xb1`, `0xc1` to `0xc4`.
