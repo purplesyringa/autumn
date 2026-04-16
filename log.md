@@ -926,3 +926,7 @@ rcr rax, cl
 ```
 
 3888 bytes.
+
+---
+
+Thought of another optimization while walking. Instead of patching out `rex.w`, we can just jump past it, so the binop code doesn't need to be self-modifying. 3880 bytes.

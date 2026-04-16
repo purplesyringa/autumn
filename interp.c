@@ -504,8 +504,7 @@ static void eval_instr() {
         while (opcode != 0x6a && opcode != 0x7c) {
             opcode -= *handler++ == 0xc3; // ret
         }
-
-        *handler = opcode == 0x7c ? 0x48 /* REX.W */ : 0x40 /* REX */;
+        handler += opcode == 0x6a; // skip REX.W if 32-bit
 
         unsigned long zero = 0;
 
