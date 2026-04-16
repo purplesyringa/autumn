@@ -453,9 +453,11 @@ static void eval_instr() {
         unsigned long a = *stack_head;
 
         unsigned char *handler = &binop_handlers;
-        while (opcode != 0x6a) {
+        while (opcode != 0x6a && opcode != 0x7c) {
             opcode -= *handler++ == 0xc3; // ret
         }
+
+        *handler = opcode == 0x7c ? 0x48 /* REX.W */ : 0x40 /* REX */;
 
         unsigned long zero = 0;
 
@@ -464,21 +466,6 @@ static void eval_instr() {
             ".pushsection .text.op;"
             "binop_handlers:"
 #define BINOP(code) code "; ret;"
-            BINOP("add %k[b], %k[a]")
-            BINOP("sub %k[b], %k[a]")
-            BINOP("imul %k[b], %k[a]")
-            BINOP("idiv %k[b]")
-            BINOP("div %k[b]")
-            BINOP("idiv %k[b]; mov %%edx, %%eax")
-            BINOP("div %k[b]; mov %%edx, %%eax")
-            BINOP("and %k[b], %k[a]")
-            BINOP("or %k[b], %k[a]")
-            BINOP("xor %k[b], %k[a]")
-            BINOP("shl %b[b], %k[a]")
-            BINOP("sar %b[b], %k[a]")
-            BINOP("shr %b[b], %k[a]")
-            BINOP("rol %b[b], %k[a]")
-            BINOP("ror %b[b], %k[a]")
             BINOP("add %[b], %[a]")
             BINOP("sub %[b], %[a]")
             BINOP("imul %[b], %[a]")

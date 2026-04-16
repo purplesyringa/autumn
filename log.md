@@ -644,3 +644,7 @@ I think I need a framework for short jump tables. I currently use ternaries to c
 That's not exactly trivial, though, due to calling conventions. I can't set up a custom one, so I probably need to just generate asm directly.
 
 Got down to 4968 bytes. That's not a big improvement, of course, but since I control the assembly now, I can replace a jump table with a linear scan, using `ret` as seaprators -- the pointers in the jump table take more space than the code. And that brings it down to 4816 bytes -- much better!
+
+---
+
+I can't help but notice that for the most part, the only difference between 32-bit and 64-bit handlers is a REX prefix. I think this time it's more useful -- `cmp` was just one instructions, but here the instructions are *everywhere*. And since the exact registers are fixed (`a` needs to be in `rax` for `div` and `b` needs to be in `rcx` for `shl`), I don't have to worry about the REX prefix being trickier to specify. This brings it down to 4720 bytes.
