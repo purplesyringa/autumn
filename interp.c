@@ -304,8 +304,7 @@ static void eval_instr() {
         unsigned long value;
         __builtin_memcpy(&value, memory + address, 8);
 
-        static unsigned char shifts[] = { 32, 0, 56, 56, 48, 48, 56, 56, 48, 48, 32, 32 };
-        unsigned char shift = shifts[opcode - 0x28];
+        unsigned char shift = (0x3830380000003020U >> (opcode * 4 & 0x38)) & 0xff;
 
         value <<= shift;
         if (opcode % 2 == 0) { // signed
@@ -322,6 +321,8 @@ static void eval_instr() {
     }
     case 0x36: // i32.store
     case 0x37: // i64.store
+    case 0x38: // f32.store
+    case 0x39: // f64.store
     case 0x3a: // i32.store8
     case 0x3b: // i32.store16
     case 0x3c: // i64.store8
@@ -333,14 +334,9 @@ static void eval_instr() {
         PARSED;
         unsigned long value = *stack_head++;
         unsigned address = offset + *stack_head++;
-        unsigned len = (
-            opcode == 0x36 || opcode == 0x3e ? 4 :
-            opcode == 0x37 ? 8 :
-            opcode == 0x3a || opcode == 0x3c ? 1 :
-            opcode == 0x3b || opcode == 0x3d ? 2 :
-            -1U
-        );
-        memcpy(memory + address, &value, len);
+        unsigned long len_const = 0x0804020102010804UL;
+        asm ("ror %b1, %0" : "+r"(len_const) : "c"(opcode * 8) : "flags");
+        memcpy(memory + address, &value, (unsigned char)len_const);
         break;
     }
     case 0x41: // i32.const

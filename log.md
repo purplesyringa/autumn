@@ -685,4 +685,22 @@ Didn't work out, unfortunately. Maybe GCC is just bad. I tried using Clang, but 
 
 I'd also like to try `-Os`, but it wants me to provide `memcmp`, even with `-ffreestanding` and `__builtin_memcmp`. I use `memcmp` to compare with `_start` and `fd_write`, but I can just emit an 8-byte write and compare constants, I guess. Somehow that's an improvement even without `-Os` (4752 bytes). And with `-Os`, it's 3952 bytes! Wow. `-Oz` is slightly better (3896 bytes), but I'll keep using `-Os` for now to keep the disassembly readable.
 
-This leaves `0xa7` to `0xb1`, `0xc1` to `0xc4`.
+---
+
+Back on track, I should really optimize stores -- they're quite bulky. The `rep movsb` is pretty much optimal, I think -- it's about short as it gets. The tricky part is optimizing `len` calculation. I need to map it like this:
+
+```
+0x36 => 4
+0x37 => 8
+0x38 => 4
+0x39 => 8
+0x3a => 1
+0x3b => 2
+0x3c => 1
+0x3d => 2
+0x3e => 4
+```
+
+I tried to use a table, but it's worse than just conditional jumps. So I did a different cool thing. If I put the bytes in a single constant, like `0x040201020108040804`, I can use the constant itself as a LUT, by shifting it to the right by `index * 8` and then taking the low byte with `movzx r32, r8`. There are 9 entries, which doesn't fit in a 64-bit constant, but I can use a rotate instead of a shift because the first and last elements match. And I can further pre-rotate the constant to avoid having to subtract `0x36` from `opcode`. That gives 3912 bytes. Applying the same trick to loads, I got 3904 bytes.
+
+This leaves `0xa7` to `0xb1`, `0xc1` to `0xc4`. I also implemented `f32.store` and `f64.store`.
