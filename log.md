@@ -814,3 +814,13 @@ Sigh. So, which `setcc` specifically is this incompatible with? `sete` and `setn
 Now I just need to switch between `cmpss` and `cmpsd` in runtime. That's another byte to patch.
 
 4200 bytes after optimization. That's... surprisingly much. As far as I can tell, only 96 bytes were added to the relevant code section, but `size` does report 192 bytes added to `.text`. Is it because jumps got longer due to distances increasing, perhaps?
+
+---
+
+Or maybe jump tables are stored as part of `.text`? I see that the jump table is there despite `-Os`, and `-Oz` doesn't change that either. How do I check its size?
+
+The relevant jump table starts at `binop_handlers+0x2f1`, which is `0x40202c`, which is part of `.rodata`. Why does `size` report the data section as having only 32 bytes? Does it count `.rodata` as text by any chance? `man size`
+
+> The Berkeley style output counts read only data in the "text" column
+
+Right. Who could've guessed. Anyway, `.rodata` has size `482`, and as far as I can tell, it's almost entirely a jump tables. Let's try something simple first -- remove jump tables entirely. One `-fno-jump-tables` later we get 4040 bytes. Let me commit that before I try other things.
