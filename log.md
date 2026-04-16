@@ -636,3 +636,11 @@ Found a bug in `i32.rotl`/`i32.rotr`, I forgot a conversion.
 Now I get an undefined reference to `__popcountdi2`. What's the status of the `popcnt` extension, anyway? Surely everyone supports it by now?
 
 It's part of SSE 4.2. I think I can enable it. 4976 bytes. Not much to optimize yet, I think I'll skip over that for now. That's integer arithmetic done.
+
+---
+
+I think I need a framework for short jump tables. I currently use ternaries to choose between values, and that generates code with `<do thing>; jmp out`, where "do thing" takes less space than `jmp out`. The least I can do is turn `jmp` into `ret`.
+
+That's not exactly trivial, though, due to calling conventions. I can't set up a custom one, so I probably need to just generate asm directly.
+
+Got down to 4968 bytes. That's not a big improvement, of course, but since I control the assembly now, I can replace a jump table with a linear scan, using `ret` as seaprators -- the pointers in the jump table take more space than the code. And that brings it down to 4816 bytes -- much better!

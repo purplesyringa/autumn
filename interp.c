@@ -446,37 +446,67 @@ static void eval_instr() {
     case 0x8a: // i64.rotr
     {
         PARSED;
+
+#define HANDLERS \
+        X(i32_add, "add %k[b], %k[a]") \
+        X(i32_sub, "sub %k[b], %k[a]") \
+        X(i32_mul, "imul %k[b], %k[a]") \
+        X(i32_div_s, "idiv %k[b]") \
+        X(i32_div_u, "div %k[b]") \
+        X(i32_rem_s, "idiv %k[b]; mov %%edx, %%eax") \
+        X(i32_rem_u, "div %k[b]; mov %%edx, %%eax") \
+        X(i32_and, "and %k[b], %k[a]") \
+        X(i32_or, "or %k[b], %k[a]") \
+        X(i32_xor, "xor %k[b], %k[a]") \
+        X(i32_shl, "shl %b[b], %k[a]") \
+        X(i32_shr_s, "sar %b[b], %k[a]") \
+        X(i32_shr_u, "shr %b[b], %k[a]") \
+        X(i32_rotl, "rol %b[b], %k[a]") \
+        X(i32_rotr, "ror %b[b], %k[a]") \
+        X(i64_add, "add %[b], %[a]") \
+        X(i64_sub, "sub %[b], %[a]") \
+        X(i64_mul, "imul %[b], %[a]") \
+        X(i64_div_s, "idiv %[b]") \
+        X(i64_div_u, "div %[b]") \
+        X(i64_rem_s, "idiv %[b]; mov %%rdx, %%rax") \
+        X(i64_rem_u, "div %[b]; mov %%rdx, %%rax") \
+        X(i64_and, "and %[b], %[a]") \
+        X(i64_or, "or %[b], %[a]") \
+        X(i64_xor, "xor %[b], %[a]") \
+        X(i64_shl, "shl %b[b], %[a]") \
+        X(i64_shr_s, "sar %b[b], %[a]") \
+        X(i64_shr_u, "shr %b[b], %[a]") \
+        X(i64_rotl, "rol %b[b], %[a]") \
+        X(i64_rotr, "ror %b[b], %[a]")
+
+        extern unsigned char binop_handlers;
+
         unsigned long b = *stack_head++;
         unsigned long a = *stack_head;
-        unsigned long value = (
-            opcode == 0x6a ? (unsigned)(a + b) :
-            opcode == 0x6b ? (unsigned)(a - b) :
-            opcode == 0x6c ? (unsigned)(a * b) :
-            opcode == 0x6d ? (unsigned)((int)a / (int)b) :
-            opcode == 0x6e || opcode == 0x80 ? a / b :
-            opcode == 0x6f ? (unsigned)((int)a % (int)b) :
-            opcode == 0x70 || opcode == 0x82 ? a % b :
-            opcode == 0x71 || opcode == 0x83 ? a & b :
-            opcode == 0x72 || opcode == 0x84 ? a | b :
-            opcode == 0x73 || opcode == 0x85 ? a ^ b :
-            opcode == 0x74 ? (unsigned)a << (b % 32) :
-            opcode == 0x75 ? (unsigned)((int)a >> (b % 32)) :
-            opcode == 0x76 ? a >> (b % 32) :
-            opcode == 0x77 ? ((unsigned)a << (b % 32)) | ((unsigned)a >> ((-b) % 32)) :
-            opcode == 0x78 ? ((unsigned)a >> (b % 32)) | ((unsigned)a << ((-b) % 32)) :
-            opcode == 0x7c ? a + b :
-            opcode == 0x7d ? a - b :
-            opcode == 0x7e ? a * b :
-            opcode == 0x7f ? (unsigned long)((long)a / (long)b) :
-            opcode == 0x81 ? (unsigned long)((long)a % (long)b) :
-            opcode == 0x86 ? a << (b % 64) :
-            opcode == 0x87 ? (unsigned long)((long)a >> (b % 64)) :
-            opcode == 0x88 ? a >> (b % 64) :
-            opcode == 0x89 ? (a << (b % 64)) | (a >> ((-b) % 64)) :
-            opcode == 0x9a ? (a >> (b % 64)) | (a << ((-b) % 64)) :
-            0
+
+        unsigned char *handler = &binop_handlers;
+        while (opcode != 0x6a) {
+            opcode -= *handler++ == 0xc3; // ret
+        }
+
+        unsigned long zero = 0;
+
+        asm volatile (
+            "call *%[handler];"
+            ".pushsection .text.op;"
+            "binop_handlers:"
+#define X(name, code) #name ": " code "; ret;"
+            HANDLERS
+#undef X
+            ".popsection"
+            : [a]"+a"(a), "+d"(zero) // specific register and zero for `div`
+            : [b]"c"(b), [handler]"r"(handler) // specific register for shifts
+            : "flags"
         );
-        *stack_head = value;
+
+#undef HANDLERS
+
+        *stack_head = a;
         break;
     }
     case 0x99: // f64.abs
