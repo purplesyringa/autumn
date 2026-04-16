@@ -824,3 +824,13 @@ The relevant jump table starts at `binop_handlers+0x2f1`, which is `0x40202c`, w
 > The Berkeley style output counts read only data in the "text" column
 
 Right. Who could've guessed. Anyway, `.rodata` has size `482`, and as far as I can tell, it's almost entirely a jump tables. Let's try something simple first -- remove jump tables entirely. One `-fno-jump-tables` later we get 4040 bytes. Let me commit that before I try other things.
+
+---
+
+So my idea is that maybe jump tables are large, but `cmp` + `je` is also large because not all jump offsets fit in 8 bits. And even if we account for intervals, almost every generic handler has to contain code for parsing per-opcode information from a LUT. So maybe instead of removing jump tables, we can just significantly simplify them: leave 1 byte for the handler index and 1 byte for arbitrary per-opcode data. Maybe that might work better? It should also increase code locality, so maybe that'll play a role.
+
+But let's start with something simpler: just move every handler out to a separate function. Somehow that reduced code by 8 bytes, funny.
+
+Next I made a 1-byte jump table. That's 4056 bytes, but now I can try to add 1-byte parameters to instructions, hopefully simplifying plenty code.
+
+So I extracted almost everything I could to single-byte args, and now I'm at 4216 bytes. So I saved 96 bytes on code, but wasted 256 bytes on a table. I now doubt that was a good idea. Apparently tables are ridiculously expensive. That's unfortunate. Rolling this back, the code is on the `optable` branch.
