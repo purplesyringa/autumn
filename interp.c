@@ -38,6 +38,8 @@ static long syscall3(long sysno, long a, long b, long c) {
     return sysno;
 }
 
+#define SCASB(ptr, count, value) asm ("repne scasb" : "+D"(ptr), "+c"(count) : "a"((unsigned char)value) : "flags");
+
 __attribute__((noinline))
 static unsigned long impl_read_int(_Bool is_signed) {
     int shift = 64;
@@ -332,6 +334,7 @@ static void eval_instr() {
         extern unsigned char unop_handlers;
 
         unsigned char *handler = &unop_handlers;
+        unsigned char count = 0xff;
         for (;;) {
             if (opcode == *handler) {
                 handler += 3;
@@ -341,7 +344,7 @@ static void eval_instr() {
                 break;
             }
             handler += 2;
-            while (*handler++ != 0xc3); // ret
+            SCASB(handler, count, 0xc3); // ret
         }
 
         asm volatile (
@@ -499,8 +502,10 @@ static void eval_instr() {
         unsigned long a = *stack_head;
 
         unsigned char *handler = &binop_handlers;
+        unsigned char count = 0xff;
         while (opcode != 0x6a && opcode != 0x7c) {
-            opcode -= *handler++ == 0xc3; // ret
+            SCASB(handler, count, 0xc3); // ret
+            opcode--;
         }
         handler += opcode == 0x6a; // skip REX.W if 32-bit
 

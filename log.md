@@ -934,3 +934,7 @@ Thought of another optimization while walking. Instead of patching out `rex.w`, 
 ---
 
 Applied a similar trick to unops, 3856 bytes.
+
+---
+
+Replaced a manual search loop with `repne scasb`, 3848 bytes.
