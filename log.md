@@ -950,3 +950,9 @@ Optimized `impl_read_int` a bit more -- I forgot that C supports multiple return
 ---
 
 So I was playing around with making `eval_instr` non-inlineable, so that opcodes could use a short `ret` to signify an exit instead of using a long `jmp`, and realized there was a prologue with `push rbp`, despite frame pointers being disabled. I was confused for a while before realizing that `rsp` is saved because it's then manually aligned to 16 bytes. I initially assumed that's due to `call` instructions and tries to set `-mpreferred-stack-boundary=3`, but it didn't help, and in fact no other functions had alignment, despite some containing nested `call`s. It turns out that it was due to `__m128i` locals -- even though they were never spilled, apparently the minimal stack alignment was still set to 16 just because they're present (even using `register` didn't help). So I had to replace them with `double`s and some such. It didn't lead to any size improvement yet, but it'll help later on.
+
+---
+
+The second reason `eval_instr` still has `push rbp` is the VLA in `br_table`. I've been looking at it for a while now, and I guess it's finally time to simplify that code. Reimplemented it without stack allocations, now it takes 3784 bytes.
+
+Stack alignment is still present... this time due to an indirect call to native code in `call_func`. `-mpreferred-stack-boundary=3` didn't help, I give up. `asm volatile` it is. 3776 bytes.

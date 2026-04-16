@@ -168,14 +168,19 @@ static void eval_instr() {
     case 0x0e: // br_table
     {
         unsigned n_labels = read_uint();
-        unsigned jump_table[n_labels];
-        for (unsigned i = 0; i < n_labels; i++) {
-            jump_table[i] = read_uint();
+        unsigned index = -1U;
+        if (break_level == 0) {
+            index = *stack_head++;
+            if (index > n_labels) {
+                index = n_labels;
+            }
         }
-        unsigned otherwise = read_uint();
-        PARSED;
-        unsigned i = *stack_head++;
-        break_level = i < n_labels ? jump_table[i] : otherwise;
+        for (unsigned i = 0; i <= n_labels; i++) {
+            unsigned level = read_uint();
+            if (i == index) {
+                break_level = level;
+            }
+        }
         break;
     }
     case 0x0f: // return
@@ -667,7 +672,13 @@ static void call_func(unsigned funcidx) {
     struct func_info *info = &funcs[funcidx];
     if (info->typeidx == -1U) {
         // native code
-        ((void (*)())info->func)();
+        asm volatile (
+            "call *%0"
+            :
+            : "a"(info->func)
+            : "memory", "flags", "rcx", "rdx", "rsi", "rdi", "r8", "r9", "r10", "r11"
+            // this should ideally also list xmm registers but eugh
+        );
         return;
     }
 
