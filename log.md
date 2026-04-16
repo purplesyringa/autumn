@@ -886,3 +886,9 @@ Implemented rounding for both `f32` and `f64`, 3712 bytes. This leaves:
 `f64.sqrt` is just `sqrtsd`. I don't know how to implement this well -- it's very similar to `roundsd` in spirit. When implemented as a separate instruction set, it bumps size to 3816 bytes. Most of that increase seems to be due to routing execution to the right place, rather than the implementation itself.
 
 It is kind of close to rounding, though... I can try merging them. That results in 3760 bytes. I guess that'll have to do, though I really don't like having to do a ton of branching.
+
+---
+
+Does SSE simply not support negation and absolutes? Clang lowers both to bit operations. I guess this simplifies things a little -- the choice between implementing these ops on integers vs floats is already done for me. 3816 bytes.
+
+While we're at it, I might as well merge the two groups of unary operators together -- misc integer arithmetic (like `i32.popcnt`) and size extension (like `i32.extend16_s`). That's 3776 bytes.

@@ -314,6 +314,18 @@ static void eval_instr() {
     case 0x79: // i64.clz
     case 0x7a: // i64.ctz
     case 0x7b: // i64.popcnt
+    case 0x8b: // f32.abs
+    case 0x8c: // f32.neg
+    case 0x99: // f64.abs
+    case 0x9a: // f64.neg
+    case 0xa7: // i32.wrap_i64
+    case 0xac: // i64.extend_i32_s
+    case 0xad: // i64.extend_i32_u
+    case 0xc0: // i32.extend8_s
+    case 0xc1: // i32.extend16_s
+    case 0xc2: // i64.extend8_s
+    case 0xc3: // i64.extend16_s
+    case 0xc4: // i64.extend32_s
     {
         PARSED;
         unsigned long x = *stack_head;
@@ -324,7 +336,17 @@ static void eval_instr() {
             opcode == 0x69 || opcode == 0x7b ? __builtin_popcount(x) :
             opcode == 0x79 ? __builtin_clzg(x, 64) :
             opcode == 0x7a ? __builtin_ctzg(x, 64) :
-            -1UL
+            opcode == 0x8b ? x & (-1U) >> 1 :
+            opcode == 0x8c ? x ^ (1U << 31) :
+            opcode == 0x99 ? x & (-1UL) >> 1 :
+            opcode == 0x9a ? x ^ (1UL << 63) :
+            opcode == 0xa7 || opcode == 0xad ? (unsigned)x :
+            opcode == 0xac || opcode == 0xc4 ? (unsigned long)(long)(int)x :
+            opcode == 0xc0 ? (unsigned int)(int)(signed char)x :
+            opcode == 0xc1 ? (unsigned int)(int)(short)x :
+            opcode == 0xc2 ? (unsigned long)(long)(signed char)x :
+            opcode == 0xc3 ? (unsigned long)(long)(short)x :
+            -1U
         );
         *stack_head = x;
         break;
@@ -545,31 +567,6 @@ static void eval_instr() {
         );
         break;
     }
-    case 0x99: // f64.abs
-        PARSED;
-        *stack_head &= (-1ULL) >> 1;
-        break;
-    case 0xa7: // i32.wrap_i64
-    case 0xac: // i64.extend_i32_s
-    case 0xad: // i64.extend_i32_u
-    case 0xc0: // i32.extend8_s
-    case 0xc1: // i32.extend16_s
-    case 0xc2: // i64.extend8_s
-    case 0xc3: // i64.extend16_s
-    case 0xc4: // i64.extend32_s
-        PARSED;
-        unsigned long value = *stack_head;
-        value = (
-            opcode == 0xa7 || opcode == 0xad ? (unsigned)*stack_head :
-            opcode == 0xac || opcode == 0xc4 ? (long)(int)*stack_head :
-            opcode == 0xc0 ? (unsigned int)(int)(signed char)*stack_head :
-            opcode == 0xc1 ? (unsigned int)(int)(short)*stack_head :
-            opcode == 0xc2 ? (long)(signed char)*stack_head :
-            opcode == 0xc3 ? (long)(short)*stack_head :
-            -1U
-        );
-        *stack_head = value;
-        break;
     case 0xfc:
         opcode = *p++;
         switch (opcode) {
