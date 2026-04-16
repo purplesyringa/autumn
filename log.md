@@ -762,3 +762,7 @@ if (opcode % 8 < 5) { // signed
 For whatever reason, though, this is less optimal than a ternary... Maybe because there are just 6 different operations? The code looks quite optimal, even though there are many jumps. I guess it'll stay a ternary then. Unfortunate!
 
 Left unimplemented: `0xa8` to `0xab`, `0xae` to `0xb1`.
+
+---
+
+This leaves memory and floating-point. Let's start with memory, that sounds simpler. We need to implement `memory.size` and `memory.grow`. I guess we can just simulate a fixed-sized array? Just need to remember not to allow the machine to go out out-of-bounds due to the fixed-size access in `*.load*` by adding a few guard bytes at the end of `memory`. 4016 bytes, very simple.

@@ -339,6 +339,14 @@ static void eval_instr() {
         memcpy(memory + address, value, (unsigned char)len_const);
         break;
     }
+    case 0x3f: // memory.size
+        PARSED;
+        *--stack_head = sizeof(memory) - 7;
+        break;
+    case 0x40: // memory.grow
+        PARSED;
+        *stack_head = -1U;
+        break;
     case 0x41: // i32.const
     case 0x42: // i64.const
     {
