@@ -1,4 +1,5 @@
 #include <fcntl.h>
+#include <immintrin.h>
 #include <stdint.h>
 // #include <stdio.h>
 #include <sys/syscall.h>
@@ -437,6 +438,44 @@ static void eval_instr() {
             : "flags"
         );
         *stack_head = cond;
+        break;
+    }
+    case 0x5b: // f32.eq
+    case 0x5c: // f32.ne
+    case 0x5d: // f32.lt
+    case 0x5e: // f32.gt
+    case 0x5f: // f32.le
+    case 0x60: // f32.ge
+    case 0x61: // f64.eq
+    case 0x62: // f64.ne
+    case 0x63: // f64.lt
+    case 0x64: // f64.gt
+    case 0x65: // f64.le
+    case 0x66: // f64.ge
+    {
+        PARSED;
+        unsigned long *b = stack_head++;
+        __m128i a = _mm_loadu_si64(stack_head);
+
+        unsigned char size_byte = 0xc2;
+        if (opcode < 0x61) {
+            size_byte++;
+            opcode += 0x61 - 0x5b;
+        }
+
+        unsigned imm8_const = 0xd2e140U;
+        asm ("ror %b1, %0" : "+r"(imm8_const) : "c"(opcode * 4) : "flags");
+        unsigned imm8 = imm8_const & 0xf;
+
+        asm (
+            "mov %2, 1f + 2(%%rip);"
+            "mov %3, 1f + 4(%%rip);"
+            "1:"
+            "vcmpss $0, %1, %0, %0"
+            : "+x"(a)
+            : "m"(*b), "r"(size_byte), "r"(imm8)
+        );
+        *stack_head = _mm_cvtsi128_si32(a) & 1;
         break;
     }
     case 0x6a: // i32.add

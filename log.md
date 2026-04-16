@@ -783,3 +783,34 @@ This didn't increase the code because I only needed to change the constant.
 ---
 
 Implemented `f32.const` and `f64.const`. 4008 bytes. I guess that makes some sense?
+
+---
+
+Comparisons look like the easiest thing to start with, since it should just be a `cmpss`, and I already have similar code with `cmp`. Though now that I think about it, maybe I can optimize integer comparisons with masks, too. Let's see... Nope, tried it and it didn't help. Let's get to work on `cmpss` then.
+
+Anyway.
+
+```
+cmpss xmm1, xmm2/m32, imm8
+```
+
+So we need to patch an `imm8`, as usual. Wait, there's no `cmpgtss`?
+
+> The greater-than relations that the processor does not implement require more than one instruction to emulate in software and therefore should not be implemented as pseudo-ops. (For these, the programmer should reverse the operands of the corresponding less than relations and use move instructions to ensure that the mask is moved to the correct destination register and that the source operand is left intact.)
+
+Oh, but the AVX version does support it with `vcmpgtss`. That's fun...
+
+I'm confused though. SSE has `nle`, which supposedly differs from `gt` in NaN handling. But then does that mean `neq` is also different from `ne` in some fashion?.. Probably not, but I'll check how LLVM lowers this on godbolt. Nevermind, it does a `ucomiss` for comparisons, but it does use `cmp[n]eqss` for `==` and `!=`. And `ucomiss` stays even with `-mavx`. Huh.
+
+Oh, that's because `cmpss` doesn't have a flag output. Then why not use `ucomiss` even for normal comparison?
+
+- On `a > b`, `ucomiss` sets `Z = 0, C = 0`, compatible with an unsigned integer comparison.
+- On `a < b`, `ucomiss` sets `Z = 0, C = 1`, compatible with an unsigned integer comparison.
+- On `a = b`, `ucomiss` sets `Z = 1, C = 0`, compatible with an unsigned integer comparison.
+- Oh, if `a` and `b` are unordered, it sets `Z = 1, C = 1`, which is typically impossible.
+
+Sigh. So, which `setcc` specifically is this incompatible with? `sete` and `setne` are obviously broken. `setb` is broken, `setae` is fine. `seta` is fine, `setbe` is broken. Yea... I don't think this'll work out. Back to `cmpss` then.
+
+Now I just need to switch between `cmpss` and `cmpsd` in runtime. That's another byte to patch.
+
+4200 bytes after optimization. That's... surprisingly much. As far as I can tell, only 96 bytes were added to the relevant code section, but `size` does report 192 bytes added to `.text`. Is it because jumps got longer due to distances increasing, perhaps?
