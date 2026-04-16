@@ -779,3 +779,7 @@ Floating-point is really scary. That's a large instruction space... we barely fi
 Let's start with loads. I played around with it and realized that loads were apparently broken?.. The constant is wrong, but hello-world didn't catch that. Huh. The conditionals were also off, though it didn't matter. Basically, with our current semantics, `i32.load` and `f32.load` are interpreted as the non-existent `i32.load64_s`, so we sign-extend the 64-bit value to a 64-bit value and then truncate the top 32 bits. This is cursed, but it's optimal. `i64.load` and `f64.load` are treated as `i64.load64_u`, which is fine.
 
 This didn't increase the code because I only needed to change the constant.
+
+---
+
+Implemented `f32.const` and `f64.const`. 4008 bytes. I guess that makes some sense?

@@ -351,10 +351,12 @@ static void eval_instr() {
         break;
     case 0x41: // i32.const
     case 0x42: // i64.const
+    case 0x43: // f32.const
+    case 0x44: // f64.const
     {
         long c = read_sint();
         PARSED;
-        *--stack_head = opcode == 0x41 ? (unsigned)c : c;
+        *--stack_head = opcode & 1 ? (unsigned)c : c;
         break;
     }
     case 0x45: // i32.eqz
