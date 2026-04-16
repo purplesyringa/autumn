@@ -85,25 +85,16 @@ enum caller_info_variant {
     LOOP,
     FUNC,
 };
-union caller_info {
+struct caller_info {
     enum caller_info_variant variant;
-    struct {
-        enum caller_info_variant variant;
+    unsigned char *saved_p;
+    union {
         _Bool executed;
-    } block_or_if;
-    struct {
-        enum caller_info_variant variant;
-        _Bool executed;
-        unsigned char *saved_p;
-    } loop;
-    struct {
-        enum caller_info_variant variant;
         unsigned long *saved_locals;
-        unsigned char *saved_p;
-    } func;
+    };
 };
-union caller_info caller_stack[1024];
-union caller_info *caller_stack_head = caller_stack;
+struct caller_info caller_stack[1024];
+struct caller_info *caller_stack_head = caller_stack;
 unsigned break_level;
 
 static void call_func(unsigned funcidx);
@@ -124,81 +115,41 @@ static void eval_instr() {
     case 0x01: // nop
         break;
     case 0x02: // block
-    {
-        p++; // blocktype
-        // printf("push block\n");
-        *caller_stack_head++ = (union caller_info) {
-            .block_or_if = {
-                .variant = BLOCK_OR_IF,
-                .executed = break_level == 0,
-            },
-        };
-        break;
-    }
     case 0x03: // loop
-    {
-        p++; // blocktype
-        // printf("push loop\n");
-        *caller_stack_head++ = (union caller_info) {
-            .loop = {
-                .variant = LOOP,
-                .executed = break_level == 0,
-                .saved_p = p - 2,
-            },
-        };
-        break;
-    }
     case 0x04: // if
     {
         p++; // blocktype
-        // printf("push if\n");
-        *caller_stack_head++ = (union caller_info) {
-            .block_or_if = {
-                .variant = BLOCK_OR_IF,
-                .executed = break_level == 0,
-            },
+        *caller_stack_head++ = (struct caller_info) {
+            .variant = opcode == 0x03 ? LOOP : BLOCK_OR_IF,
+            .saved_p = p - 2,
+            .executed = break_level == 0,
         };
-        break_level += break_level == 0 && *stack_head++;
+        break_level += opcode == 0x04 && break_level == 0 && *stack_head++;
         break;
     }
     case 0x0b: // end
     {
-        union caller_info *caller = --caller_stack_head;
-        switch (caller->variant) {
-        case BLOCK_OR_IF:
-            // printf("pop block/if\n");
-            break_level -= caller->block_or_if.executed && break_level > 0;
-            break;
-        case LOOP:
-            // printf("pop loop\n");
-            if (caller->loop.executed && break_level > 0 && --break_level == 0) {
-                p = caller->loop.saved_p;
-            }
-            break;
-        case FUNC:
-            // printf("pop func at bl=%d\n", break_level);
+        struct caller_info *caller = --caller_stack_head;
+        if (caller->variant == FUNC) {
             break_level = 0;
-            locals = caller->func.saved_locals;
-            p = caller->func.saved_p;
-            // printf("Exit\n", p);
-            break;
+            locals = caller->saved_locals;
+            p = caller->saved_p;
+        } else {
+            if (caller->executed && break_level > 0) {
+                break_level--;
+                if (caller->variant == LOOP && break_level == 0) {
+                    p = caller->saved_p;
+                }
+            }
         }
         break;
     }
     case 0x0c: // br
-    {
-        unsigned labelidx = read_uint();
-        PARSED;
-        // printf("break for %u\n", labelidx + 1);
-        break_level = labelidx + 1;
-        break;
-    }
     case 0x0d: // br_if
     {
         unsigned labelidx = read_uint();
         PARSED;
-        // printf("br_if with condition %lu\n", *stack_head);
-        if (*stack_head++) {
+        if (opcode == 0x0c || *stack_head++) {
             break_level = labelidx + 1;
         }
         break;
@@ -257,17 +208,12 @@ static void eval_instr() {
         break;
     }
     case 0x21: // local.set
-    {
-        unsigned localidx = read_uint();
-        PARSED;
-        locals[localidx] = *stack_head++;
-        break;
-    }
     case 0x22: // local.tee
     {
         unsigned localidx = read_uint();
         PARSED;
         locals[localidx] = *stack_head;
+        stack_head += opcode == 0x21;
         break;
     }
     case 0x23: // global.get
@@ -635,12 +581,10 @@ static void call_func(unsigned funcidx) {
     p = body_p;
 
     // printf("push func\n");
-    *caller_stack_head++ = (union caller_info) {
-        .func = {
-            .variant = FUNC,
-            .saved_locals = saved_locals,
-            .saved_p = saved_p,
-        },
+    *caller_stack_head++ = (struct caller_info) {
+        .variant = FUNC,
+        .saved_p = saved_p,
+        .saved_locals = saved_locals,
     };
 }
 

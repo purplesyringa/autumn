@@ -834,3 +834,7 @@ But let's start with something simpler: just move every handler out to a separat
 Next I made a 1-byte jump table. That's 4056 bytes, but now I can try to add 1-byte parameters to instructions, hopefully simplifying plenty code.
 
 So I extracted almost everything I could to single-byte args, and now I'm at 4216 bytes. So I saved 96 bytes on code, but wasted 256 bytes on a table. I now doubt that was a good idea. Apparently tables are ridiculously expensive. That's unfortunate. Rolling this back, the code is on the `optable` branch.
+
+---
+
+While working with the optable, I found some other avenues for optimization due to similarity between some control opcodes. This brings the size down from 4040 bytes to 3864 bytes.
