@@ -449,7 +449,7 @@ static void eval_instr() {
     {
         PARSED;
         unsigned long *b = stack_head++;
-        __m128i a = _mm_loadu_si64(stack_head);
+        unsigned long *a = stack_head;
 
         unsigned char size_byte = 0xc2;
         if (opcode < 0x61) {
@@ -461,15 +461,16 @@ static void eval_instr() {
         asm ("ror %b1, %0" : "+r"(imm8_const) : "c"(opcode * 4) : "flags");
         unsigned imm8 = imm8_const & 0xf;
 
+        int result;
         asm (
-            "mov %2, 1f + 2(%%rip);"
-            "mov %3, 1f + 4(%%rip);"
+            "mov %3, 1f + 2(%%rip);"
+            "mov %4, 1f + 4(%%rip);"
             "1:"
-            "vcmpss $0, %1, %0, %0"
-            : "+x"(a)
-            : "m"(*b), "r"(size_byte), "r"(imm8)
+            "vcmpss $0, %2, %1, %0"
+            : "=x"(result)
+            : "x"(*a), "m"(*b), "r"(size_byte), "r"(imm8)
         );
-        *stack_head = _mm_cvtsi128_si32(a) & 1;
+        *stack_head = result & 1;
         break;
     }
     case 0x6a: // i32.add
@@ -579,7 +580,7 @@ static void eval_instr() {
             *handler = 0xf3 - is_f64;
         }
 
-        __m128i a;
+        double a;
         asm (
             "xorps %0, %0;"
             "call *%[handler];"

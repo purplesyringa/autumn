@@ -946,3 +946,7 @@ Found a bug in `impl_read_int` -- varints containing more than 64 bits were pars
 ---
 
 Optimized `impl_read_int` a bit more -- I forgot that C supports multiple return values. 3824 bytes.
+
+---
+
+So I was playing around with making `eval_instr` non-inlineable, so that opcodes could use a short `ret` to signify an exit instead of using a long `jmp`, and realized there was a prologue with `push rbp`, despite frame pointers being disabled. I was confused for a while before realizing that `rsp` is saved because it's then manually aligned to 16 bytes. I initially assumed that's due to `call` instructions and tries to set `-mpreferred-stack-boundary=3`, but it didn't help, and in fact no other functions had alignment, despite some containing nested `call`s. It turns out that it was due to `__m128i` locals -- even though they were never spilled, apparently the minimal stack alignment was still set to 16 just because they're present (even using `register` didn't help). So I had to replace them with `double`s and some such. It didn't lead to any size improvement yet, but it'll help later on.
