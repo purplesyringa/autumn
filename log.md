@@ -966,3 +966,7 @@ For now, the best I can do is add `__attribute__((noinline))` and call it a day.
 ---
 
 Apparently my `if` inverted the condition and still worked?? Wow.
+
+---
+
+Optimized `struct caller_info` population. 3680 bytes.

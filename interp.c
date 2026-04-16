@@ -91,18 +91,10 @@ register unsigned long *stack_head asm ("r13");
 unsigned long locals_stack[1024];
 unsigned long *locals = locals_stack + sizeof(locals_stack) / sizeof(locals_stack[0]);
 
-enum caller_info_variant {
-    BLOCK_OR_IF,
-    LOOP,
-    FUNC,
-};
 struct caller_info {
-    enum caller_info_variant variant;
+    unsigned char opcode;
     unsigned char *saved_p;
-    union {
-        _Bool executed;
-        unsigned long *saved_locals;
-    };
+    unsigned long *saved_locals;
 };
 struct caller_info caller_stack[1024];
 struct caller_info *caller_stack_head = caller_stack;
@@ -132,24 +124,23 @@ static void eval_instr() {
     {
         p++; // blocktype
         *caller_stack_head++ = (struct caller_info) {
-            .variant = opcode == 0x03 ? LOOP : BLOCK_OR_IF,
+            .opcode = opcode,
             .saved_p = p - 2,
-            .executed = break_level == 0,
         };
-        break_level += opcode == 0x04 && break_level == 0 && !*stack_head++;
+        break_level += break_level > 0 || (opcode == 0x04 && !*stack_head++);
         break;
     }
     case 0x0b: // end
     {
         struct caller_info *caller = --caller_stack_head;
-        if (caller->variant == FUNC) {
+        if (caller->opcode == 0x10 /* call */) {
             break_level = 0;
             locals = caller->saved_locals;
             p = caller->saved_p;
         } else {
-            if (caller->executed && break_level > 0) {
+            if (break_level > 0) {
                 break_level--;
-                if (caller->variant == LOOP && break_level == 0) {
+                if (caller->opcode == 0x03 /* loop */ && break_level == 0) {
                     p = caller->saved_p;
                 }
             }
@@ -186,7 +177,7 @@ static void eval_instr() {
     }
     case 0x0f: // return
         PARSED;
-        break_level = -1U;
+        break_level = 0x80000000U;
         break;
     case 0x10: // call
     {
@@ -708,7 +699,7 @@ static void call_func(unsigned funcidx) {
 
     // printf("push func\n");
     *caller_stack_head++ = (struct caller_info) {
-        .variant = FUNC,
+        .opcode = 0x10 /* call */,
         .saved_p = saved_p,
         .saved_locals = saved_locals,
     };
