@@ -708,3 +708,57 @@ This leaves `0xa7` to `0xb1`, `0xc1` to `0xc4`. I also implemented `f32.store` a
 ---
 
 I just realized I could optimize stores a bit further. Since stores are actually copies from `stack` to `memory`, it can be a direct `memcpy`, without going through a stack local. 3888 bytes.
+
+---
+
+Back to arithmetic. `0xa7`... are truncation/extension instructions that don't interact with memory. Some of them are floating-point-related, I'll skip those for now.
+
+This is funny: `i64.extend_i32_s` and `i64.extend32_s` do the same thing and have very similar names, but have different signatures (`i32 -> i64` vs `i64 -> i64`).
+
+This looks similar to loads, in fact I think I can reuse some code. But the opcodes are not consecutive. But we got *ridiculously* lucky. Look at this:
+
+```c
+case 0xa7: // i32.wrap_i64
+case 0xac: // i64.extend_i32_s
+case 0xad: // i64.extend_i32_u
+case 0xc0: // i32.extend8_s
+case 0xc1: // i32.extend16_s
+case 0xc2: // i64.extend8_s
+case 0xc3: // i64.extend16_s
+case 0xc4: // i64.extend32_s
+```
+
+Not only are the last 4 nibbles different among all opcodes -- the last *3* bits almost don't collide, and when they do collide (`0xac` and `0xc4`) it's between `i64.extend_i32_s` and `i64.extend32_s`, which have the same semantics!
+
+```
+i32.extend8_s
+i32.extend16_s
+i64.extend8_s
+i64.extend16_s
+i64.extend32_s i64.extend_i32_s
+i64.extend_i32_u
+nop
+i32.wrap_i64
+```
+
+So we can use an 8-byte LUT, and that means an inline 64-bit constant! And it gets better: signed operations are not only consecutive, but form a prefix, so we can use a single comparison for that. And same for `i32` operations! I refuse to believe this is an accident.
+
+```c
+unsigned long shift_const = 0x2000202030383038UL;
+asm ("shr %b1, %0" : "+r"(shift_const) : "c"(opcode * 8) : "flags");
+unsigned char shift = shift_const & 0xff;
+
+value <<= shift;
+if (opcode % 8 < 5) { // signed
+    value = (long)value >> shift;
+    if (opcode % 8 < 2) { // 32-bit destination
+        value &= -1U;
+    }
+} else {
+    value >>= shift;
+}
+```
+
+For whatever reason, though, this is less optimal than a ternary... Maybe because there are just 6 different operations? The code looks quite optimal, even though there are many jumps. I guess it'll stay a ternary then. Unfortunate!
+
+Left unimplemented: `0xa8` to `0xab`, `0xae` to `0xb1`.

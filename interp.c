@@ -507,13 +507,26 @@ static void eval_instr() {
         PARSED;
         *stack_head &= (-1ULL) >> 1;
         break;
+    case 0xa7: // i32.wrap_i64
+    case 0xac: // i64.extend_i32_s
     case 0xad: // i64.extend_i32_u
-        PARSED;
-        *stack_head = (unsigned)*stack_head;
-        break;
     case 0xc0: // i32.extend8_s
+    case 0xc1: // i32.extend16_s
+    case 0xc2: // i64.extend8_s
+    case 0xc3: // i64.extend16_s
+    case 0xc4: // i64.extend32_s
         PARSED;
-        *stack_head = (unsigned long)(int)(signed char)*stack_head;
+        unsigned long value = *stack_head;
+        value = (
+            opcode == 0xa7 || opcode == 0xad ? (unsigned)*stack_head :
+            opcode == 0xac || opcode == 0xc4 ? (long)(int)*stack_head :
+            opcode == 0xc0 ? (unsigned int)(int)(signed char)*stack_head :
+            opcode == 0xc1 ? (unsigned int)(int)(short)*stack_head :
+            opcode == 0xc2 ? (long)(signed char)*stack_head :
+            opcode == 0xc3 ? (long)(short)*stack_head :
+            -1U
+        );
+        *stack_head = value;
         break;
     case 0xfc:
         opcode = *p++;
