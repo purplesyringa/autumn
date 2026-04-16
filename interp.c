@@ -332,11 +332,11 @@ static void eval_instr() {
         read_uint(); // align
         unsigned offset = read_uint();
         PARSED;
-        unsigned long value = *stack_head++;
+        unsigned long *value = stack_head++;
         unsigned address = offset + *stack_head++;
         unsigned long len_const = 0x0804020102010804UL;
         asm ("ror %b1, %0" : "+r"(len_const) : "c"(opcode * 8) : "flags");
-        memcpy(memory + address, &value, (unsigned char)len_const);
+        memcpy(memory + address, value, (unsigned char)len_const);
         break;
     }
     case 0x41: // i32.const

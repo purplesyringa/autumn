@@ -704,3 +704,7 @@ Back on track, I should really optimize stores -- they're quite bulky. The `rep 
 I tried to use a table, but it's worse than just conditional jumps. So I did a different cool thing. If I put the bytes in a single constant, like `0x040201020108040804`, I can use the constant itself as a LUT, by shifting it to the right by `index * 8` and then taking the low byte with `movzx r32, r8`. There are 9 entries, which doesn't fit in a 64-bit constant, but I can use a rotate instead of a shift because the first and last elements match. And I can further pre-rotate the constant to avoid having to subtract `0x36` from `opcode`. That gives 3912 bytes. Applying the same trick to loads, I got 3904 bytes.
 
 This leaves `0xa7` to `0xb1`, `0xc1` to `0xc4`. I also implemented `f32.store` and `f64.store`.
+
+---
+
+I just realized I could optimize stores a bit further. Since stores are actually copies from `stack` to `memory`, it can be a direct `memcpy`, without going through a stack local. 3888 bytes.
