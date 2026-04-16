@@ -582,6 +582,36 @@ static void eval_instr() {
         );
         break;
     }
+    case 0x92: // f32.add
+    case 0x93: // f32.sub
+    case 0x94: // f32.mul
+    case 0x95: // f32.div
+    case 0xa0: // f64.add
+    case 0xa1: // f64.sub
+    case 0xa2: // f64.mul
+    case 0xa3: // f64.div
+    {
+        PARSED;
+
+        unsigned char size_byte = 0xf2;
+        if (opcode >= 0xa0) { // f64
+            size_byte++;
+            opcode -= 0xa0 - 0x92;
+        }
+        unsigned char op_byte = 0x5e595c58U >> ((opcode - 0x92) * 8);
+
+        unsigned long *b = stack_head++;
+        unsigned long *a = stack_head;
+        asm (
+            "mov %2, 1f(%%rip);"
+            "mov %3, 1f + 2(%%rip);"
+            "1:"
+            "addsd %1, %0;"
+            : "+x"(*a)
+            : "m"(*b), "r"(size_byte), "r"(op_byte)
+        );
+        break;
+    }
     case 0xfc:
         opcode = *p++;
         switch (opcode) {

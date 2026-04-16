@@ -900,3 +900,11 @@ The unary op handling has grown in size significantly. I'd love to use the same 
 That worsened it. Due to the calling convention, I'm assuming? This isn't Clang, though, so there's no `preserve_none`. Inline `asm` it is then. And I think I can kinda use a flat key-value map for opcode implementations.
 
 It's a little cursed, but it's now 3664 bytes.
+
+---
+
+I'm getting the feeling I might just be able to fit floating-point arithmetic in here.
+
+I'll focus on simple binary operators for now. I have a feeling `min`/`max` might be complex due to `NaN` handling. I was wondering where `rem` was, but I guess it has a valid userland implementation based on floored dividion and FMA... but I don't think either is present in Wasm, at least in Wasm 1.0. Anyway.
+
+Implemented `add`, `sub`, `mul`, `div`, got 3784 bytes.
