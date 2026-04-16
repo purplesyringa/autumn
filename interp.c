@@ -338,6 +338,10 @@ static void eval_instr() {
     case 0x50: // i64.eqz
     case 0x67: // i32.clz
     case 0x68: // i32.ctz
+    case 0x69: // i32.popcnt
+    case 0x79: // i64.clz
+    case 0x7a: // i64.ctz
+    case 0x7b: // i64.popcnt
     {
         PARSED;
         unsigned long x = *stack_head;
@@ -345,6 +349,9 @@ static void eval_instr() {
             opcode == 0x45 || opcode == 0x50 ? x == 0 :
             opcode == 0x67 ? __builtin_clzg(x, 32) :
             opcode == 0x68 ? __builtin_ctzg(x, 32) :
+            opcode == 0x69 || opcode == 0x7b ? __builtin_popcount(x) :
+            opcode == 0x79 ? __builtin_clzg(x, 64) :
+            opcode == 0x7a ? __builtin_ctzg(x, 64) :
             -1UL
         );
         *stack_head = x;
@@ -410,18 +417,33 @@ static void eval_instr() {
     case 0x6a: // i32.add
     case 0x6b: // i32.sub
     case 0x6c: // i32.mul
+    case 0x6d: // i32.div_s
+    case 0x6e: // i32.div_u
+    case 0x6f: // i32.rem_s
+    case 0x70: // i32.rem_u
     case 0x71: // i32.and
     case 0x72: // i32.or
     case 0x73: // i32.xor
     case 0x74: // i32.shl
+    case 0x75: // i32.shr_s
     case 0x76: // i32.shr_u
     case 0x77: // i32.rotl
+    case 0x78: // i32.rotr
     case 0x7c: // i64.add
+    case 0x7d: // i64.sub
+    case 0x7e: // i64.mul
+    case 0x7f: // i64.div_s
     case 0x80: // i64.div_u
     case 0x81: // i64.rem_s
+    case 0x82: // i64.rem_u
     case 0x83: // i64.and
     case 0x84: // i64.or
+    case 0x85: // i64.xor
     case 0x86: // i64.shl
+    case 0x87: // i64.shr_s
+    case 0x88: // i64.shr_u
+    case 0x89: // i64.rotl
+    case 0x8a: // i64.rotr
     {
         PARSED;
         unsigned long b = *stack_head++;
@@ -430,16 +452,28 @@ static void eval_instr() {
             opcode == 0x6a ? (unsigned)(a + b) :
             opcode == 0x6b ? (unsigned)(a - b) :
             opcode == 0x6c ? (unsigned)(a * b) :
+            opcode == 0x6d ? (unsigned)((int)a / (int)b) :
+            opcode == 0x6e || opcode == 0x80 ? a / b :
+            opcode == 0x6f ? (unsigned)((int)a % (int)b) :
+            opcode == 0x70 || opcode == 0x82 ? a % b :
             opcode == 0x71 || opcode == 0x83 ? a & b :
             opcode == 0x72 || opcode == 0x84 ? a | b :
-            opcode == 0x73 ? a ^ b :
+            opcode == 0x73 || opcode == 0x85 ? a ^ b :
             opcode == 0x74 ? (unsigned)a << (b % 32) :
+            opcode == 0x75 ? (unsigned)((int)a >> (b % 32)) :
             opcode == 0x76 ? a >> (b % 32) :
-            opcode == 0x77 ? (a << (b % 32)) | (a >> ((-b) % 32)) :
+            opcode == 0x77 ? ((unsigned)a << (b % 32)) | ((unsigned)a >> ((-b) % 32)) :
+            opcode == 0x78 ? ((unsigned)a >> (b % 32)) | ((unsigned)a << ((-b) % 32)) :
             opcode == 0x7c ? a + b :
-            opcode == 0x80 ? a / b :
+            opcode == 0x7d ? a - b :
+            opcode == 0x7e ? a * b :
+            opcode == 0x7f ? (unsigned long)((long)a / (long)b) :
             opcode == 0x81 ? (unsigned long)((long)a % (long)b) :
             opcode == 0x86 ? a << (b % 64) :
+            opcode == 0x87 ? (unsigned long)((long)a >> (b % 64)) :
+            opcode == 0x88 ? a >> (b % 64) :
+            opcode == 0x89 ? (a << (b % 64)) | (a >> ((-b) % 64)) :
+            opcode == 0x9a ? (a >> (b % 64)) | (a << ((-b) % 64)) :
             0
         );
         *stack_head = value;

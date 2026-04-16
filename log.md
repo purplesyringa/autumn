@@ -624,3 +624,15 @@ Okay, so I just patched the bit by hand with a small C script. `<elf.h>` is cool
 This leaves:
 
 - Various comparisons: `0x5b` to `0x66`.
+
+---
+
+I considered patching the `cmp` between 32-bit and 64-bit variants as well, instead of sign-extending values, but I think that'll have to wait. It's not impossible to do, but the savings will likely be minimal.
+
+I should just switch to other instrs, like integer arithmetic.
+
+Found a bug in `i32.rotl`/`i32.rotr`, I forgot a conversion.
+
+Now I get an undefined reference to `__popcountdi2`. What's the status of the `popcnt` extension, anyway? Surely everyone supports it by now?
+
+It's part of SSE 4.2. I think I can enable it. 4976 bytes. Not much to optimize yet, I think I'll skip over that for now. That's integer arithmetic done.

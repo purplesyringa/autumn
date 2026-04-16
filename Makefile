@@ -1,4 +1,4 @@
-OPTS := -O2 -fno-align-functions -fno-align-jumps -fno-align-labels -fno-align-loops
+OPTS := -O2 -fno-align-functions -fno-align-jumps -fno-align-labels -fno-align-loops -msse4.2
 
 interp: interp.c make-rwx
 	$(CC) $< -o $@ $(OPTS) -Wall -Wextra -g -fno-stack-protector -nostdlib -static
