@@ -136,7 +136,7 @@ static void eval_instr() {
             .saved_p = p - 2,
             .executed = break_level == 0,
         };
-        break_level += opcode == 0x04 && break_level == 0 && *stack_head++;
+        break_level += opcode == 0x04 && break_level == 0 && !*stack_head++;
         break;
     }
     case 0x0b: // end

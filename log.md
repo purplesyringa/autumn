@@ -962,3 +962,7 @@ Stack alignment is still present... this time due to an indirect call to native 
 I can't make GCC emit conditional returns as jumps over `ret`. It wants to emit a conditional `jmp` to a single far-away `ret` instead. What do you even do about it? And it's not like `asm volatile ("ret")` works -- first, it SIGSEGVs under ASAN for obvious reasons, and second, it generates worse code when there *is* a `ret` nearby. Sounds like something better left to an assembly version, I guess.
 
 For now, the best I can do is add `__attribute__((noinline))` and call it a day. 3696 bytes.
+
+---
+
+Apparently my `if` inverted the condition and still worked?? Wow.
