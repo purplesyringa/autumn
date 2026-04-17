@@ -632,18 +632,18 @@ static void eval_instr() {
         unsigned long *b = stack_head++;
 
         unsigned short size = opcode >= 0xa4 ? 0xf266 /* f64 */ : 0xf390 /* f32 */;
-        unsigned short op = opcode & 1 ? 0xdb5f /* max */ : 0xeb5d /* min */;
+        unsigned short op = opcode & 1 ? 0xdb73 /* max */ : 0xeb72 /* min */;
 
         asm (
             "mov %b[size], 1f(%%rip);"
-            "mov %h[size], 2f(%%rip);"
             "mov %h[size], 4f(%%rip);"
-            "mov %b[op], 2f + 2(%%rip);"
+            "mov %b[op], 2f(%%rip);"
             "mov %h[op], 3f + 2(%%rip);"
             "1: ucomiss %[b], %[a];"
             "je 3f;"
             "jp 4f;"
-            "2: minss %[b], %[a]; jmp 5f;"
+            "2: jb 5f;"
+            "movq %[b], %[a]; jmp 5f;"
             "3: pand %[b], %[a]; jmp 5f;" // -0 considered less than +0
             "4: addss %[b], %[a];"
             "5:"

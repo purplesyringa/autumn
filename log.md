@@ -1029,3 +1029,11 @@ I thought I can get away with unconditionally resetting both bits 63 and 31, but
 Omfg `pmaxuq` doesn't exist until AVX-512. I don't like this. Surely there's another way to choose between `-0` and `+0`, though? I think this time `or` works for `min` (preferring the sign bit set), and `and` works for `max` (preferring the sign bit reset). And hey, that's one less place to patch for `ss`/`sd`! (Sidenote: "one fewer" sounds wrong despite "place" being a countable noun. Apparently there's a special rule for "one"? I love intuition.)
 
 I *think* I implemented it? 3664 bytes. That's over 100 bytes just for this operation!
+
+---
+
+I think at least some of the patching is more expensive than plain code duplication would be. I don't think I've *ever* used patching where duplication would also work yet, except perhaps in `fnn.sqrt`, but there it worked because it coincided with the various unary rounding ops, so I could reuse code.
+
+But then again, `cmov`s are expensive because they're not really a thing for vector registers... and GCC refuses to generate conditional jumps.
+
+I could replace `minss` back with a jump and two `mov`s. That'd remove one place that needs `ss`/`sd` patching, but then I'd need to patch `min`/`max` in two places. Or I could patch between `jb` and `jnb`, that also works. That removes 6 bytes from patching and adds 2 bytes from `jb` -- that's a win in my book. The file size didn't change because it always seems to be a multiple of 8.
