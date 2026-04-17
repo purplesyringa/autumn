@@ -1206,3 +1206,9 @@ I still can't believe there's no way to generate `NaN` safely in a size-independ
 For now, I think I can optimize `round` and `sqrt` -- they currently use the same code, but their handling is very different, and I think I can optimize this. Both currently contain `xorps %0, %0` because `roundss`/`sqrtss` don't override the second 32-bit word, and I thought that was a problem; but since I'm reading from `stack` rather than `memory`, that word should be zero anyway.
 
 It's 3936 bytes now, i.e. an increase of 16 bytes. I *think* this is due to `switch`, `PARSED`, and maybe `movq`. It's something that a jump table might help with, and the assembly version won't have problems with this.
+
+---
+
+Last time I tried a manual jump table, it was slightly bigger than `switch`. Now that there are more operations and `switch` is more expensive, will the jump table perhaps be more optimal?
+
+Tried a very straightforward implementation, and it's down to 3872 bytes. Let me quickly commit that.
