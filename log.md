@@ -1188,3 +1188,7 @@ This leaves demotions and promotions from the main instruction set. Technically 
 ---
 
 While working on these ops, I realized that there's one more place where I can use `0x66` instead of `0xf2`/`0xf3`. I can replace `addsd` with `addpd`, and similarly with other FP binops. 3872 bytes.
+
+---
+
+Also found a bug in `fnn.const`. 3936 bytes.

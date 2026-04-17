@@ -311,12 +311,25 @@ static void eval_instr() {
         break;
     case 0x41: // i32.const
     case 0x42: // i64.const
-    case 0x43: // f32.const
-    case 0x44: // f64.const
     {
         long c = read_sint();
         PARSED;
         *--stack_head = opcode & 1 ? (unsigned)c : c;
+        break;
+    }
+    case 0x43: // f32.const
+    case 0x44: // f64.const
+    {
+        unsigned long value;
+        __builtin_memcpy(&value, p, 8);
+        if (opcode == 0x43) { // f32.const
+            value &= -1U;
+            p += 4;
+        } else {
+            p += 8;
+        }
+        PARSED;
+        *--stack_head = value;
         break;
     }
     case 0x45: // i32.eqz
