@@ -67,7 +67,7 @@ The next section is the function section. The first section we can (probably) sk
 
 The next section is the table section. I *think* we can also skip this one? Wasm 1.0 says there's only one table and it's always of `funcref`s, so it's not like there's anything to parse.
 
-The next section is the memory section. There can be only one memory in Wasm 1.0, so the only useful thing to extract here is the minimum and maxium size of the linear memory. We don't need to track the high boundary. Technically we don't need to track the low boundary either, we can just hardcode like 1 MiB and it'll work fine I guess. So we don't need this section either.
+The next section is the memory section. There can be only one memory in Wasm 1.0, so the only useful thing to extract here is the minimum and maximum size of the linear memory. We don't need to track the high boundary. Technically we don't need to track the low boundary either, we can just hardcode like 1 MiB and it'll work fine I guess. So we don't need this section either.
 
 The next section is the global section. This one contains values, so it's finally something we need to parse. The issue is that it contains initializers, which is code. Though the verification section says it must be a *constant* expression, which basically just means it needs to be a single `t.const` instruction. That simplifies things to say the least!
 
@@ -445,7 +445,7 @@ Say `eval_until` tries to becomes a tail call. What do I usually do after it, wh
 - In `loop`, I check if `executed && break_level > 0 && --break_level == 0` and reset `p` if so, then continue as usual.
 - In function invocation, I reset `break_level` and some other properties and then continue as usual.
 
-So what I'm thinking is that this small tail (a variant ID, together with teh saved parameters) should just be stored on the manual stack and evaluated by hand as necessary.
+So what I'm thinking is that this small tail (a variant ID, together with the saved parameters) should just be stored on the manual stack and evaluated by hand as necessary.
 
 ...except: function calls will have to reverse arguments, since x86's stack grows downwards. Hopefully that's fine and doesn't end up being too long?
 
@@ -1069,7 +1069,7 @@ Let's start with `inn.trunc_fnn_*`. It takes `fnn` as an input and outputs `inn`
 - If the input is finite and `trunc(input)` is a valid integer, that's the output.
 - Otherwise, the output is undefined.
 
-The spec says this on partial operators (i.e. those that can have an undefiend output):
+The spec says this on partial operators (i.e. those that can have an undefined output):
 
 > Where the underlying operators are partial, the corresponding instruction will trap when the result is not defined.
 
@@ -1094,7 +1094,7 @@ The opcode space here is frankly quite ridiculous because floating-point convers
 
 ---
 
-Here comes the fun part... The least we can do is replace the GCC `unsigned long` lowering with the LLVM lowering. GCC uses `comisd` to check if the value fits in 63 bits, LLVM reads the output to determine if it fits, relying on the fact that failed converion always returns `2^63`.
+Here comes the fun part... The least we can do is replace the GCC `unsigned long` lowering with the LLVM lowering. GCC uses `comisd` to check if the value fits in 63 bits, LLVM reads the output to determine if it fits, relying on the fact that failed conversion always returns `2^63`.
 
 It would be cool if we could replace `x - 2^63` with some other calculation, so that we don't have to load `2^63` from memory (increase both `.text` and `.rodata`). It *feels* possible: in this case, all valid values are from `2^63` to `2^64` exclusive, so the exponent is always `63`. We *just* need to extract the mantissa, shift it to the left by 11, and set the highest bit. In fact, I think just `shl x, 11` + `bts x, 63` works, since we're effectively just setting the hidden bit.
 
@@ -1114,7 +1114,7 @@ I have a feeling that x86 can't handle unsigned integers here as well, or someth
 
 GCC codegens from `unsigned long` conversion by checking the high bit, and if it's set, it shifts the value to the right by one (making sure to round correctly), converts it, and then doubles the result. LLVM uses something trickier.
 
-Okay, that's clever. It reinterprets `0x43300000<low half>` and `0x45300000<high half>` (exponent of 84) as doubles. The former has an exponent of 52, so it's equal to `2^52 + low`. The latter is `2^84 + high * 2^32`. It then subtracts `2^52` and `2^84` respectively from both values and sums the results (with `vhaddpd` under `-Os`). Clever! These guys are cooking.
+Okay, that's clever. It reinterprets `0x43300000<low half>` and `0x45300000<high half>` as doubles. The former has an exponent of 52, so it's equal to `2^52 + low`. The latter is `2^84 + high * 2^32`. It then subtracts `2^52` and `2^84` respectively from both values and sums the results (with `vhaddpd` under `-Os`). Clever! These guys are cooking.
 
 There are three steps to this approach:
 
@@ -1181,7 +1181,7 @@ Let's try a simpler one for now -- the `reinterpret` family. That's just bitcast
 
 This leaves demotions and promotions from the main instruction set. Technically those are "just" unary ops, so it's probably reasonable to treat them as integer unops and just inserts casts.
 
-`cvtsd2ss` and `cvtss2sd` differ by the first byte (`0xf2` vs `0xf3`), but have already been in this situation before -- `cvtpd2ps` and `cvtps2pd` differ by the presence of `0x66`, so I can reuse the REX-skipping mechanism to skip the precision override prefix if I use the packed version.
+`cvtsd2ss` and `cvtss2sd` differ by the first byte (`0xf2` vs `0xf3`), but I have already been in this situation before -- `cvtpd2ps` and `cvtps2pd` differ by the presence of `0x66`, so I can reuse the REX-skipping mechanism to skip the precision override prefix if I use the packed version.
 
 3880 bytes -- refreshingly small.
 
