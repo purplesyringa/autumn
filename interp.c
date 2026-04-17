@@ -117,6 +117,10 @@ static void eval_instr() {
         PARSED;
         __builtin_trap();
     case 0x01: // nop
+    case 0xbc: // i32.reinterpret_f32
+    case 0xbd: // i64.reinterpret_f64
+    case 0xbe: // f32.reinterpret_i32
+    case 0xbf: // f64.reinterpret_i64
         break;
     case 0x02: // block
     case 0x03: // loop

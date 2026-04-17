@@ -1172,3 +1172,7 @@ asm (
 It takes more code than it used to. *facepalm* Fine, let's copy the GCC lowering then.
 
 After fixing a few bugs and applying optimizations assuming lack of traps, like in the previous section, I get 3848 bytes. I don't know why this is a larger increase than the previous time, even though the code looks similar. Probably the `switch`.
+
+---
+
+Let's try a simpler one for now -- the `reinterpret` family. That's just bitcasts, and so they don't need *any* lowering -- they're just `nop`s! That's a first. Still 3848 bytes.
