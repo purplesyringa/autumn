@@ -970,3 +970,9 @@ Apparently my `if` inverted the condition and still worked?? Wow.
 ---
 
 Optimized `struct caller_info` population. 3680 bytes.
+
+---
+
+I'm realizing there's a dichotomy. If I use `rsp` for call stack, I can't use it for data, and accesses are long. If I use `rsp` for data, I can't use `ret`, and handler exit paths are long. `leave; ret` can at least safely return, but loses `rsp`. Hmm, `jmp rbp` is just two bytes though. I wish there was a 1-byte instruction. There's plenty of ways to trigger various exceptions, but setting up their handlers will likely take more code.
+
+This will have to wait for assembly anyway. For now, I can reduce the cost of `PARSED` a little by making `break_level` a register as well. It's the third such variable -- and hopefully the last one. With a few other minor optimizations I get 3552 bytes.

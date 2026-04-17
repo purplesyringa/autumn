@@ -98,7 +98,7 @@ struct caller_info {
 };
 struct caller_info caller_stack[1024];
 struct caller_info *caller_stack_head = caller_stack;
-unsigned break_level;
+register unsigned break_level asm ("r14");
 
 static void call_func(unsigned funcidx);
 
@@ -204,8 +204,9 @@ static void eval_instr() {
         PARSED;
         unsigned long cond = *stack_head++;
         unsigned long b = *stack_head++;
-        // printf("select with condition %lu\n", cond);
-        *stack_head = cond ? *stack_head : b;
+        if (!cond) {
+            *stack_head = b;
+        }
         break;
     }
     case 0x20: // local.get
@@ -292,7 +293,7 @@ static void eval_instr() {
         unsigned long *value = stack_head++;
         unsigned address = offset + *stack_head++;
         unsigned long len_const = 0x0804020102010804UL;
-        asm ("ror %b1, %0" : "+r"(len_const) : "c"(opcode * 8) : "flags");
+        asm ("shr %b1, %0" : "+r"(len_const) : "c"(opcode * 8) : "flags");
         memcpy(memory + address, value, (unsigned char)len_const);
         break;
     }
@@ -455,7 +456,7 @@ static void eval_instr() {
         }
 
         unsigned imm8_const = 0xd2e140U;
-        asm ("ror %b1, %0" : "+r"(imm8_const) : "c"(opcode * 4) : "flags");
+        asm ("shr %b1, %0" : "+r"(imm8_const) : "c"(opcode * 4) : "flags");
         unsigned imm8 = imm8_const & 0xf;
 
         int result;
