@@ -704,6 +704,44 @@ static void eval_instr() {
         *stack_head = out;
         break;
     }
+    case 0xb2: // f32.convert_i32_s
+    case 0xb3: // f32.convert_i32_u
+    case 0xb4: // f32.convert_i64_s
+    case 0xb5: // f32.convert_i64_u
+    case 0xb7: // f64.convert_i32_s
+    case 0xb8: // f64.convert_i32_u
+    case 0xb9: // f64.convert_i64_s
+    case 0xba: // f64.convert_i64_u
+    {
+        PARSED;
+        _Bool is_f32 = opcode < 0xb7;
+        if (is_f32) {
+            opcode += 0xb7 - 0xb2;
+        }
+
+        unsigned long x = *stack_head;
+
+        // extend input to 64-bit
+        if (opcode == 0xb7) { // f64.convert_i32_s
+            x = (long)(int)x;
+        }
+
+        double out;
+        asm ("cvtsi2sd %1, %0;" : "=x"(out) : "r"(x));
+        if (opcode == 0xba && (long)x < 0) { // f64.convert_i64_u
+            x = (x >> 1) | (x & 1);
+            asm ("cvtsi2sd %1, %0;" : "=x"(out) : "r"(x));
+            out += out;
+        }
+
+        if (is_f32) {
+            float f = out;
+            out = 0;
+            __builtin_memcpy(&out, &f, 4);
+        }
+        __builtin_memcpy(stack_head, &out, 8);
+        break;
+    }
     case 0xfc:
         opcode = *p++;
         switch (opcode) {

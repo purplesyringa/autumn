@@ -1101,3 +1101,74 @@ It would be cool if we could replace `x - 2^63` with some other calculation, so 
 This might become an issue later if we try to add traps, but for now this reduces size. In fact, if we don't care about traps, we can use the same code for `i64.trunc_fnn_u` and `i32.trunc_fnn_u`. And same for the `_s` variants -- we can convert to `long` first and conditionally truncate the top 32 bits second.
 
 That's 3728 bytes, and it doesn't even need much assembly.
+
+---
+
+The next large group is int-to-float conversions. This one should be easier.
+
+Is it safe to implement `(float)i` as `(float)(double)i`? It *looks* safe, but I'm worried about edge cases.
+
+Is it possible for `(float)i` to return +inf, but for `(float)(double)i` to return a finite number? `(float)i` is +inf if `i` is close to `f32`'s limit, i.e. at least halfway between the maximum finite value and +inf. `(double)i` should round this to a power of two that `(float)` will then interpret as the limit and return +inf. And LLVM seems to agree that `(float)(double)i == (float)i` as well. That's good enough for me.
+
+I have a feeling that x86 can't handle unsigned integers here as well, or something. Yup, it needs similar special-casing in this direction, too.
+
+GCC codegens from `unsigned long` conversion by checking the high bit, and if it's set, it shifts the value to the right by one (making sure to round correctly), converts it, and then doubles the result. LLVM uses something trickier.
+
+Okay, that's clever. It reinterprets `0x43300000<low half>` and `0x45300000<high half>` (exponent of 84) as doubles. The former has an exponent of 52, so it's equal to `2^52 + low`. The latter is `2^84 + high * 2^32`. It then subtracts `2^52` and `2^84` respectively from both values and sums the results (with `vhaddpd` under `-Os`). Clever! These guys are cooking.
+
+There are three steps to this approach:
+
+- Interleaving halves and constants, done with `vpunpckldq`.
+- Subtracting the constants, done with `vsubpd`.
+- Summing up results, done with `vhaddpd`.
+
+The issue with `vpunpckldq`/`vsubpd` is that it can't reuse a constant, because `vpunpckldq` requires it to be in form `<low const><high const><0><0>`, whereas `vsubpd` requires `<low const><0><high const><0>`. We could save 16 bytes on reusing constants if there was a way to use the same format with both. I'm thinking `vpshufd` and then reuse the constant.
+
+Does `vpshufd` support reading from unaligned memory, i.e. our `stack`? https://github.com/StanfordPL/stoke/issues/381#issuecomment-68233729 says it does, and from my memory that checks out. Then maybe:
+
+```asm
+convert:
+    vpshufd xmm0, [rdi], 0b11011000
+    vorpd xmm0, xmm0, [rel const]
+    vsubpd xmm0, xmm0, [rel const]
+    vhaddpd xmm0, xmm0, xmm0
+    ret
+
+const:
+    dq 0x4330000000000000, 0x4530000000000000
+```
+
+Having a 16-byte constant is suboptimal. Alternatively, it can be generated on the fly from an 8-byte constant:
+
+```
+convert:
+    vpshufd xmm1, [rel const], 0b01110010
+    vpshufd xmm0, [rdi], 0b11011000
+    vorpd xmm0, xmm0, xmm1
+    vsubpd xmm0, xmm0, xmm1
+    vhaddpd xmm0, xmm0, xmm0
+    ret
+
+const:
+    dq 0x4530000043300000
+```
+
+I guess this will have to do.
+
+```c
+static unsigned long magic_c = 0x4530000043300000;
+double magic;
+asm (
+    "vpshufd $0b01110010, %[magic_c], %[magic];"
+    "vpshufd $0b11011000, %[x], %[out];"
+    "vorpd %[magic], %[out], %[out];"
+    "vsubpd %[magic], %[out], %[out];"
+    "vhaddpd %[out], %[out], %[out];"
+    : [magic]"=&x"(magic), [out]"=&x"(out)
+    : [magic_c]"m"(magic_c), [x]"x"(x)
+);
+```
+
+It takes more code than it used to. *facepalm* Fine, let's copy the GCC lowering then.
+
+After fixing a few bugs and applying optimizations assuming lack of traps, like in the previous section, I get 3848 bytes. I don't know why this is a larger increase than the previous time, even though the code looks similar. Probably the `switch`.
