@@ -1198,3 +1198,11 @@ Also found a bug in `fnn.const`. 3936 bytes.
 Optimized and fixed `fnn` comparisons. Patching was buggy, and I separately found a way to use `0x66`. 3928 bytes.
 
 Separately from that, found another avenue for optimization in `fnn.min/max`: instead of patching the `0x66` prefix in or out, I can jump over it based on a flag. I need to insert two conditional jumps: over the prefix of `ucomisd` and then afterwards, over the prefix of `addpd`. With luck, I can use a flag that `ucomisd` doesn't reset so that I need to perform the test only once. Unfortunately, `ucomisd` affects all arithmetic flags, so I can't actually do that. But it's not too expensive, so I guess that's fine 3920 bytes.
+
+---
+
+I still can't believe there's no way to generate `NaN` safely in a size-independent manner. Surely there's some 64-bit arithmetic operation that produces something that looks a 32-bit `NaN`? `f32` reinterpreted as `f64` is always a subnormal. So, for example, `addsd` applied to 32-bit `f32`s actually adds them by bitwise value (overflowing into bit 32). This is not the correct output, but still. I don't know if I can apply this anywhere.
+
+For now, I think I can optimize `round` and `sqrt` -- they currently use the same code, but their handling is very different, and I think I can optimize this. Both currently contain `xorps %0, %0` because `roundss`/`sqrtss` don't override the second 32-bit word, and I thought that was a problem; but since I'm reading from `stack` rather than `memory`, that word should be zero anyway.
+
+It's 3936 bytes now, i.e. an increase of 16 bytes. I *think* this is due to `switch`, `PARSED`, and maybe `movq`. It's something that a jump table might help with, and the assembly version won't have problems with this.
