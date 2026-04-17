@@ -1049,3 +1049,13 @@ I thought I could combine this `0`/`-1` constant with the `0xdb`/`0xeb` opcode i
 Hmm... but ZF is not the only cool flag -- there's also PF! And parity is really similar to the XOR we're looking for. Let's see: `0xdb` and `0xeb` have equal parities, but `0xdb + 0x5` and `0xeb + 0x5` have distinct ones. And adding `1` flips the parity. Intel in shambles, first use for PF found in ages.
 
 3648 bytes. I feel oddly proud.
+
+---
+
+Here's my thoughts on `NaN` handling. We don't actually need `addss` or anything like that, because we aren't required to propagate `NaN` payloads. We can just unconditionally emit a canonical `NaN`.
+
+We need to choose between `0x7fc00000 = (0x1ff << 22)` and `0x7ff8000000000000 = (0xfff << 51)` based on size. It's an interval of bits -- I thought there was some instruction with packed operands for that? Well... `bextr` is that, but for reading. Then scratch that, it sounds like too much code.
+
+Though now I wonder: why do `ucomiss` and `addss` use different formats for encoding precision? `ucomiss` uses a precision override prefix, while `addss` uses `0xf2` vs `0xf3` as a required prefix. I see that `addps`/`addpd` use `0x66` though... I think I can just use the packed version then to reuse the same byte for both. Also fixed a typo. And I'm now using `0x67` as the 32-bit fallback instead of `0x90`, since it's easier to generate and should be an ignored prefix for these instructions.
+
+3640 bytes now.
