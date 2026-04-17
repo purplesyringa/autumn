@@ -334,6 +334,8 @@ static void eval_instr() {
     case 0xa7: // i32.wrap_i64
     case 0xac: // i64.extend_i32_s
     case 0xad: // i64.extend_i32_u
+    case 0xb6: // f32.demote_f64
+    case 0xbb: // f64.promote_f32
     case 0xc0: // i32.extend8_s
     case 0xc1: // i32.extend16_s
     case 0xc2: // i64.extend8_s
@@ -358,6 +360,7 @@ static void eval_instr() {
             SCASB(handler, count, 0xc3); // ret
         }
 
+        unsigned long xmm = *stack_head;
         asm volatile (
             "call *%[handler];"
             ".pushsection .text.op;"
@@ -370,10 +373,11 @@ static void eval_instr() {
             ".byte 0x8c, 0x9a; btc $63, %0; ret;"
             ".byte 0xa7, 0xad; nop; mov %k0, %k0; ret;"
             ".byte 0xac, 0xc4; nop; movsx %k0, %0; ret;"
+            ".byte 0xbb, 0xb6; cvtpd2ps %1, %1; movq %1, %0; ret;"
             ".byte 0xc0, 0xc2; movsx %b0, %0; ret;"
             ".byte 0xc1, 0xc3; movsx %w0, %0; ret;" // needs to be last because it contains 0xc3
             ".popsection"
-            : "+a"(*stack_head) // specific register to make sure 0xc3 doesn't appear by accident
+            : "+a"(*stack_head), "+x"(xmm) // specific register to make sure 0xc3 doesn't appear by accident
             : [handler]"r"(handler)
             : "flags"
         );

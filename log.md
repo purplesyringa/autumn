@@ -1176,3 +1176,11 @@ After fixing a few bugs and applying optimizations assuming lack of traps, like 
 ---
 
 Let's try a simpler one for now -- the `reinterpret` family. That's just bitcasts, and so they don't need *any* lowering -- they're just `nop`s! That's a first. Still 3848 bytes.
+
+---
+
+This leaves demotions and promotions from the main instruction set. Technically those are "just" unary ops, so it's probably reasonable to treat them as integer unops and just inserts casts.
+
+`cvtsd2ss` and `cvtss2sd` differ by the first byte (`0xf2` vs `0xf3`), but have already been in this situation before -- `cvtpd2ps` and `cvtps2pd` differ by the presence of `0x66`, so I can reuse the REX-skipping mechanism to skip the precision override prefix if I use the packed version.
+
+3880 bytes -- refreshingly small.
