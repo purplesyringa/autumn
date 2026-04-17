@@ -1212,3 +1212,16 @@ It's 3936 bytes now, i.e. an increase of 16 bytes. I *think* this is due to `swi
 Last time I tried a manual jump table, it was slightly bigger than `switch`. Now that there are more operations and `switch` is more expensive, will the jump table perhaps be more optimal?
 
 Tried a very straightforward implementation, and it's down to 3872 bytes. Let me quickly commit that.
+
+---
+
+I see two ways to improve further:
+
+- Either I try to make the jump table 16-bit again, storing more data there to reduce code size,
+- Or I compress the jump table with RLE, relying on its repetitiveness.
+
+I think RLE is better, but I lowkey need to try both.
+
+Yuki realized these optimizations are actually independent: if I deinterleave `i` and `arg` into separate arrays, I can apply RLE to `i` and keep `arg` as-is. If `arg`s improve code size without RLE, they'll improve it with RLE by the same size.
+
+With just args, the code is down to 3840 bytes. It's very slightly better than dynamic constant generation, but it scales much better and can hopefully be compressed at least a bit.
