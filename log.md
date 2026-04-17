@@ -1192,3 +1192,9 @@ While working on these ops, I realized that there's one more place where I can u
 ---
 
 Also found a bug in `fnn.const`. 3936 bytes.
+
+---
+
+Optimized and fixed `fnn` comparisons. Patching was buggy, and I separately found a way to use `0x66`. 3928 bytes.
+
+Separately from that, found another avenue for optimization in `fnn.min/max`: instead of patching the `0x66` prefix in or out, I can jump over it based on a flag. I need to insert two conditional jumps: over the prefix of `ucomisd` and then afterwards, over the prefix of `addpd`. With luck, I can use a flag that `ucomisd` doesn't reset so that I need to perform the test only once. Unfortunately, `ucomisd` affects all arithmetic flags, so I can't actually do that. But it's not too expensive, so I guess that's fine 3920 bytes.

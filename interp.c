@@ -468,28 +468,28 @@ static void eval_instr() {
     {
         PARSED;
         unsigned long *b = stack_head++;
-        unsigned long *a = stack_head;
 
-        unsigned char size_byte = 0xc2;
-        if (opcode < 0x61) {
-            size_byte++;
+        _Bool is_f32 = opcode < 0x61;
+        if (is_f32) {
             opcode += 0x61 - 0x5b;
         }
 
         unsigned imm8_const = 0xd2e140U;
         asm ("shr %b1, %0" : "+r"(imm8_const) : "c"(opcode * 4) : "flags");
-        unsigned imm8 = imm8_const & 0xf;
+        unsigned char imm8 = imm8_const & 0xf;
 
-        int result;
+        unsigned long out;
         asm (
-            "mov %3, 1f + 2(%%rip);"
-            "mov %4, 1f + 4(%%rip);"
+            "mov %[imm8], 1f + 4(%%rip);"
+            "test %[size], %[size];"
+            "jne 1f + 1;"
             "1:"
-            "vcmpss $0, %2, %1, %0"
-            : "=x"(result)
-            : "x"(*a), "m"(*b), "r"(size_byte), "r"(imm8)
+            "cmppd $0, %[b], %[a]"
+            : "=x"(out)
+            : [a]"0"(*stack_head), [b]"m"(*b), [size]"r"(is_f32), [imm8]"r"(imm8)
+            : "flags"
         );
-        *stack_head = result & 1;
+        *stack_head = out & 1;
         break;
     }
     case 0x6a: // i32.add
@@ -640,6 +640,7 @@ static void eval_instr() {
             "addpd %1, %0;"
             : "+x"(*a)
             : "m"(*b), "r"(is_f64), "r"(op_byte)
+            : "flags"
         );
         break;
     }
@@ -652,24 +653,25 @@ static void eval_instr() {
 
         unsigned long *b = stack_head++;
 
-        unsigned char size = 0x66 + (opcode >= 0xa4);
         unsigned char op = 0xeb - ((opcode & 1) << 4);
 
         asm (
-            "mov %[size], 1f(%%rip);"
-            "mov %[size], 3f(%%rip);"
             "mov %[op], 2f + 2(%%rip);"
+            "cmp $0xa4, %[opcode];"
+            "jb 1f + 1;"
             "1: ucomisd %[b], %[a];"
             "je 2f;"
             "jp 3f;"
             "adc $5, %[op];"
-            "jnp 4f;"
+            "jnp 5f;"
             "movq %[b], %[a];"
-            "2: pand %[b], %[a]; jmp 4f;" // -0 considered less than +0
-            "3: addpd %[b], %[a];"
-            "4:"
+            "2: pand %[b], %[a]; jmp 5f;" // -0 considered less than +0
+            "3: cmp $0xa4, %[opcode];"
+            "jb 4f + 1;"
+            "4: addpd %[b], %[a];"
+            "5:"
             : [a]"+x"(*stack_head)
-            : [b]"x"(*b), [size]"r"(size), [op]"r"(op)
+            : [b]"x"(*b), [opcode]"r"(opcode), [op]"r"(op)
             : "flags"
         );
         break;
