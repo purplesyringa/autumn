@@ -1184,3 +1184,7 @@ This leaves demotions and promotions from the main instruction set. Technically 
 `cvtsd2ss` and `cvtss2sd` differ by the first byte (`0xf2` vs `0xf3`), but have already been in this situation before -- `cvtpd2ps` and `cvtps2pd` differ by the presence of `0x66`, so I can reuse the REX-skipping mechanism to skip the precision override prefix if I use the packed version.
 
 3880 bytes -- refreshingly small.
+
+---
+
+While working on these ops, I realized that there's one more place where I can use `0x66` instead of `0xf2`/`0xf3`. I can replace `addsd` with `addpd`, and similarly with other FP binops. 3872 bytes.

@@ -611,9 +611,8 @@ static void eval_instr() {
     {
         PARSED;
 
-        unsigned char size_byte = 0xf2;
-        if (opcode >= 0xa0) { // f64
-            size_byte++;
+        _Bool is_f64 = opcode >= 0xa0;
+        if (is_f64) {
             opcode -= 0xa0 - 0x92;
         }
         unsigned char op_byte = 0x5e595c58U >> ((opcode - 0x92) * 8);
@@ -621,12 +620,13 @@ static void eval_instr() {
         unsigned long *b = stack_head++;
         unsigned long *a = stack_head;
         asm (
-            "mov %2, 1f(%%rip);"
             "mov %3, 1f + 2(%%rip);"
+            "test %2, %2;"
+            "je 1f + 1;"
             "1:"
-            "addsd %1, %0;"
+            "addpd %1, %0;"
             : "+x"(*a)
-            : "m"(*b), "r"(size_byte), "r"(op_byte)
+            : "m"(*b), "r"(is_f64), "r"(op_byte)
         );
         break;
     }
