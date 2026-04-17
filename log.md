@@ -1037,3 +1037,15 @@ I think at least some of the patching is more expensive than plain code duplicat
 But then again, `cmov`s are expensive because they're not really a thing for vector registers... and GCC refuses to generate conditional jumps.
 
 I could replace `minss` back with a jump and two `mov`s. That'd remove one place that needs `ss`/`sd` patching, but then I'd need to patch `min`/`max` in two places. Or I could patch between `jb` and `jnb`, that also works. That removes 6 bytes from patching and adds 2 bytes from `jb` -- that's a win in my book. The file size didn't change because it always seems to be a multiple of 8.
+
+---
+
+I think it should still be possible to improve further. For example, I think I don't actually need to patch between `jb` and `jnb` -- I just need to invert the carry flag if the operation is `max`, so really I just need a primitive that allows conditionally flipping CF.
+
+I know `adc 0, 0xff` copies CF, but `adc` can never invert it because it's monotonous over C: if addition overflows, adding larger numbers will also overflow. But I don't actually need the output in CF specifically -- something like ZF will also work. And that's the primitive: `adc 0, 0` sets `ZF = !CF`, while `adc -1, 0` sets `ZF = CF`.
+
+I thought I could combine this `0`/`-1` constant with the `0xdb`/`0xeb` opcode in `pand`/`por`, but that doesn't quite work. With `adc`, I need addition to typically yield `0` or `-1`, and use CF to nudge it to `1` or `0` respectively. but the difference between `0xdb` and `0xeb` is not exactly `1`, so that doesn't work. Maybe there's another instruction that inputs carry? `rcl`/`rcr` come to mind, but it won't ever emit a zero output.
+
+Hmm... but ZF is not the only cool flag -- there's also PF! And parity is really similar to the XOR we're looking for. Let's see: `0xdb` and `0xeb` have equal parities, but `0xdb + 0x5` and `0xeb + 0x5` have distinct ones. And adding `1` flips the parity. Intel in shambles, first use for PF found in ages.
+
+3648 bytes. I feel oddly proud.
