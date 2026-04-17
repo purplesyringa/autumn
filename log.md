@@ -976,3 +976,56 @@ Optimized `struct caller_info` population. 3680 bytes.
 I'm realizing there's a dichotomy. If I use `rsp` for call stack, I can't use it for data, and accesses are long. If I use `rsp` for data, I can't use `ret`, and handler exit paths are long. `leave; ret` can at least safely return, but loses `rsp`. Hmm, `jmp rbp` is just two bytes though. I wish there was a 1-byte instruction. There's plenty of ways to trigger various exceptions, but setting up their handlers will likely take more code.
 
 This will have to wait for assembly anyway. For now, I can reduce the cost of `PARSED` a little by making `break_level` a register as well. It's the third such variable -- and hopefully the last one. With a few other minor optimizations I get 3552 bytes.
+
+---
+
+I think I should stop chasing optimizations for now and see how many features I can add. I've been sleeping terribly the last few days, so a lighter workload might be better.
+
+I haven't implemented `fnn.min/max` yet. What are their semantics? If either value is a `NaN`, they return a `NaN`, otherwise the behavior is trivial. Are `minsd`/`maxsd` similar?
+
+> If only one value is a NaN (SNaN or QNaN) for this instruction, the second source operand, either a NaN or a valid floating-point value, is written to the result. If instead of this behavior, it is required that the NaN source operand (from either the first or second source) be returned, the action of MINSD can be emulated using a sequence of instructions, such as, a comparison followed by AND, ANDN, and OR.
+
+Nope, that's wrong. Unfortunate. How does Rust handle this? I thought it had several different `min`-like functions. `f32::minimum` seems to have the right behavior, and it handles `-0 < +0` too. https://doc.rust-lang.org/stable/std/primitive.f32.html#method.minimum How does LLVM lower it? Oh it's so nasty. That's garbage. Slightly better with `-C target-feature=+avx`, though seemingly just due to ABI differences. The lowering is still confusing though. It compares `a < b`, `a > b`, and if neither is true, it *also* compares both `a unord b` and `a != b`. I think it can be made simpler and compilers are just stupid about float comparison.
+
+e.g. here's a valid implementation of `f32.min`:
+
+```
+	ucomiss a, b
+	jb .a_lt_b
+	je .a_eq_b
+	jnp .a_gt_b
+	return a + b
+.a_lt_b:
+	return a
+.a_eq_b:
+	return max(bits(a), bits(b)) -- -0 considered less than +0
+.a_gt_b:
+	return b
+```
+
+Unfortunately I don't see many possibilities for code reuse. Both `ucomiss` and `a + b` are sized and will need to be patched between `ss` and `sd`, and there's going to be duplication between `min` and `max`. I can have two return values, both for `min` and `max`, I guess... or I could patch some comparisons, but that's likely more expensive.
+
+Wait, I'm stupid. `minss` behaves correctly if the inputs are neither unordered nor equal, so I don't need two paths for `<` and `>`.
+
+Man, patching all these `ss`s is gonna suck. Brainstorming: I tried using `min(signed(bits(a)), signed(bits(b)))` instead of `max(bits(a), bits(b))` because it seemed closer in meaning, but only `max` is size-independent.
+
+For now, let's just see if it's better to patch `min`/`max` or use two outputs. Two outputs immediately increase the code size by ~30 bytes due to duplication and a late `cmov`, and they'll also require more `ss`/`sd` patching. How difficult is it to patch `min`/`max`?
+
+Looks like it's more optimal than `cmov`, if slightly. The codegen sucks a little, but that's due to GCC rather than intrinsic inefficiency. Time to think about `ss`/`sd`.
+
+I don't think I need `addss` to propagate `NaN`s. Can't I just use `or`? `NaN` is represented as the maximum exponent and a non-zero mantissa. ORing this with anything can only change the sign or mantissa, but can't make it non-`NaN`. The Wasm spec says that:
+
+> When the result of a floating-point operator other than fneg, fabs, or fcopysign is a NaN, then its sign is non-deterministic and the payload is computed as follows:
+>
+> - If the payload of all NaN inputs to the operator is canonical (including the case that there are no NaN inputs), then the payload of the output is canonical as well.
+> - Otherwise the payload is picked non-determinsitically among all arithmetic NaNs; that is, its most significant bit is 1 and all others are unspecified.
+
+Wait, no, that's broken then. A canonical NaN is a qNaN (so the highest bit of mantissa set, which is also preserved) with other mantissa bits reset. But ORing with a non-`NaN` can set them.
+
+Technically, I can instead reset the highest bit of both inputs and do an unsigned `max`. That forces the sign to positive and chooses the value with the largest exponent and then mantissa. Since `NaN` has the largest exponent, it always wins, except against infinities, but infinities have a mantissa of zero, so it's not a problem either.
+
+I thought I can get away with unconditionally resetting both bits 63 and 31, but that's actually broken -- for a `double` sNaN with a mantissa of `2^31`, this will turn it into `Infinity`. I guess I can still pass a constant of `31` or `63` in `cl`, through, or something... but it's likely to take much longer than the four bytes of `addss`, even taking `ss`/`sd` patching into account.
+
+Omfg `pmaxuq` doesn't exist until AVX-512. I don't like this. Surely there's another way to choose between `-0` and `+0`, though? I think this time `or` works for `min` (preferring the sign bit set), and `and` works for `max` (preferring the sign bit reset). And hey, that's one less place to patch for `ss`/`sd`! (Sidenote: "one fewer" sounds wrong despite "place" being a countable noun. Apparently there's a special rule for "one"? I love intuition.)
+
+I *think* I implemented it? 3664 bytes. That's over 100 bytes just for this operation!

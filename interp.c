@@ -622,6 +622,37 @@ static void eval_instr() {
         );
         break;
     }
+    case 0x96: // f32.min
+    case 0x97: // f32.max
+    case 0xa4: // f64.min
+    case 0xa5: // f64.max
+    {
+        PARSED;
+
+        unsigned long *b = stack_head++;
+
+        unsigned short size = opcode >= 0xa4 ? 0xf266 /* f64 */ : 0xf390 /* f32 */;
+        unsigned short op = opcode & 1 ? 0xdb5f /* max */ : 0xeb5d /* min */;
+
+        asm (
+            "mov %b[size], 1f(%%rip);"
+            "mov %h[size], 2f(%%rip);"
+            "mov %h[size], 4f(%%rip);"
+            "mov %b[op], 2f + 2(%%rip);"
+            "mov %h[op], 3f + 2(%%rip);"
+            "1: ucomiss %[b], %[a];"
+            "je 3f;"
+            "jp 4f;"
+            "2: minss %[b], %[a]; jmp 5f;"
+            "3: pand %[b], %[a]; jmp 5f;" // -0 considered less than +0
+            "4: addss %[b], %[a];"
+            "5:"
+            : [a]"+x"(*stack_head)
+            : [b]"x"(*b), [size]"Q"(size), [op]"Q"(op)
+            : "flags"
+        );
+        break;
+    }
     case 0x98: // f32.copysign
     case 0xa6: // f64.copysign
     {
