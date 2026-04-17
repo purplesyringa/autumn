@@ -1083,3 +1083,11 @@ Without AVX-512, x86 has the following truncating conversions:
 Notably, this only handles signed conversions. AVX-512 also has `vcvttsd2usi` and `vcvttss2usi` for unsigned conversions, but I'd much prefer not to rely on it. Compilers generate rather ugly code for conversion to `unsigned long` -- they convert both `x` and `x - 2^63` to `long` and then merge the two results depending on the value of `x` (either via comparisons or by taking the high bit of `cvt(x)`). When converting to `unsigned`, they just convert to `long` instead and use wrap-around as `poison`.
 
 Let's forget about trapping then, and just rely on compiler-generated code for now. 3856 bytes, a more than 200-byte increase.
+
+---
+
+So, first of all, `f32` -> `f64` conversion is precise, so we can convert to `double`s first and then run the same code regardless of input type.
+
+The opcode space here is frankly quite ridiculous because floating-point conversions are intermingled with pure-integer conversions, but oh well.
+
+3784 bytes.
