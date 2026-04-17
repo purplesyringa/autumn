@@ -1059,3 +1059,27 @@ We need to choose between `0x7fc00000 = (0x1ff << 22)` and `0x7ff8000000000000 =
 Though now I wonder: why do `ucomiss` and `addss` use different formats for encoding precision? `ucomiss` uses a precision override prefix, while `addss` uses `0xf2` vs `0xf3` as a required prefix. I see that `addps`/`addpd` use `0x66` though... I think I can just use the packed version then to reuse the same byte for both. Also fixed a typo. And I'm now using `0x67` as the 32-bit fallback instead of `0x90`, since it's easier to generate and should be an ignored prefix for these instructions.
 
 3640 bytes now.
+
+---
+
+I think that's comparisons done! Next up are conversions.
+
+Let's start with `inn.trunc_fnn_*`. It takes `fnn` as an input and outputs `inn`, where:
+
+- If the input is finite and `trunc(input)` is a valid integer, that's the output.
+- Otherwise, the output is undefined.
+
+The spec says this on partial operators (i.e. those that can have an undefiend output):
+
+> Where the underlying operators are partial, the corresponding instruction will trap when the result is not defined.
+
+I'm not sure if we want to handle traps -- it's not like we do any validation elsewhere. Though maybe it makes sense to draw a distinction between *runtime* properties and *static* properties. For instance, we can assume that the Wasm file passes validation, but still handle runtime OOB accesses. But let's forget about that for a second and focus on conversions.
+
+Without AVX-512, x86 has the following truncating conversions:
+
+- `cvttsd2si` -- `double` to `int`/`long` in GPRs
+- `cvttss2si` -- `float` to `int`/`long` in GPRs
+
+Notably, this only handles signed conversions. AVX-512 also has `vcvttsd2usi` and `vcvttss2usi` for unsigned conversions, but I'd much prefer not to rely on it. Compilers generate rather ugly code for conversion to `unsigned long` -- they convert both `x` and `x - 2^63` to `long` and then merge the two results depending on the value of `x` (either via comparisons or by taking the high bit of `cvt(x)`). When converting to `unsigned`, they just convert to `long` instead and use wrap-around as `poison`.
+
+Let's forget about trapping then, and just rely on compiler-generated code for now. 3856 bytes, a more than 200-byte increase.

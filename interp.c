@@ -668,6 +668,40 @@ static void eval_instr() {
         );
         break;
     }
+    case 0xa8: // i32.trunc_f32_s
+    case 0xa9: // i32.trunc_f32_u
+    case 0xae: // i64.trunc_f32_s
+    case 0xaf: // i64.trunc_f32_u
+    {
+        PARSED;
+        float x;
+        __builtin_memcpy(&x, stack_head, 4);
+        *stack_head = (
+            opcode == 0xa8 ? (unsigned long)(int)x :
+            opcode == 0xa9 ? (unsigned)x :
+            opcode == 0xae ? (unsigned long)(long)x :
+            opcode == 0xaf ? (unsigned long)x :
+            -1U
+        );
+        break;
+    }
+    case 0xaa: // i32.trunc_f64_s
+    case 0xab: // i32.trunc_f64_u
+    case 0xb0: // i64.trunc_f64_s
+    case 0xb1: // i64.trunc_f64_u
+    {
+        PARSED;
+        double x;
+        __builtin_memcpy(&x, stack_head, 4);
+        *stack_head = (
+            opcode == 0xaa ? (unsigned long)(int)x :
+            opcode == 0xab ? (unsigned)x :
+            opcode == 0xb0 ? (unsigned long)(long)x :
+            opcode == 0xb1 ? (unsigned long)x :
+            -1U
+        );
+        break;
+    }
     case 0xfc:
         opcode = *p++;
         switch (opcode) {
