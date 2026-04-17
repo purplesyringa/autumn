@@ -688,13 +688,20 @@ static void eval_instr() {
             x = f;
         }
 
-        *stack_head = (
-            (opcode & 0b101) == 0b000 ? (unsigned long)(unsigned)(int)x :
-            (opcode & 0b101) == 0b001 ? (unsigned)x :
-            (opcode & 0b101) == 0b100 ? (unsigned long)(long)x :
-            (opcode & 0b101) == 0b101 ? (unsigned long)x :
-            -1U
-        );
+        unsigned long out;
+        asm ("cvttsd2si %1, %0;" : "=r"(out) : "x"(x));
+
+        if (opcode & 1) { // inn.trunc_f64_u
+            if ((long)out < 0) {
+                out = (out << 11) | (1UL << 63);
+            }
+        } else {
+            if (!(opcode & 4)) { // i32
+                out = (unsigned)out;
+            }
+        }
+
+        *stack_head = out;
         break;
     }
     case 0xfc:

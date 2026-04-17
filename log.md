@@ -1091,3 +1091,13 @@ So, first of all, `f32` -> `f64` conversion is precise, so we can convert to `do
 The opcode space here is frankly quite ridiculous because floating-point conversions are intermingled with pure-integer conversions, but oh well.
 
 3784 bytes.
+
+---
+
+Here comes the fun part... The least we can do is replace the GCC `unsigned long` lowering with the LLVM lowering. GCC uses `comisd` to check if the value fits in 63 bits, LLVM reads the output to determine if it fits, relying on the fact that failed converion always returns `2^63`.
+
+It would be cool if we could replace `x - 2^63` with some other calculation, so that we don't have to load `2^63` from memory (increase both `.text` and `.rodata`). It *feels* possible: in this case, all valid values are from `2^63` to `2^64` exclusive, so the exponent is always `63`. We *just* need to extract the mantissa, shift it to the left by 11, and set the highest bit. In fact, I think just `shl x, 11` + `bts x, 63` works, since we're effectively just setting the hidden bit.
+
+This might become an issue later if we try to add traps, but for now this reduces size. In fact, if we don't care about traps, we can use the same code for `i64.trunc_fnn_u` and `i32.trunc_fnn_u`. And same for the `_s` variants -- we can convert to `long` first and conditionally truncate the top 32 bits second.
+
+That's 3728 bytes, and it doesn't even need much assembly.
