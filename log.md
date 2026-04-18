@@ -1225,3 +1225,39 @@ I think RLE is better, but I lowkey need to try both.
 Yuki realized these optimizations are actually independent: if I deinterleave `i` and `arg` into separate arrays, I can apply RLE to `i` and keep `arg` as-is. If `arg`s improve code size without RLE, they'll improve it with RLE by the same size.
 
 With just args, the code is down to 3840 bytes. It's very slightly better than dynamic constant generation, but it scales much better and can hopefully be compressed at least a bit.
+
+---
+
+This RLE thing makes me uneasy. If I run out of code space, I'll mostly like need to introduce whole-program compression, and that'd make nested RLE obsolete. Such compression feels a bit cheaty, but on the other hand, we already have self-modifying code, and decompression technically also counts as self-modifying code...
+
+I tried to use `gzip` to check just how compressible the binary is. It compressed it to 2483 bytes -- that's a 35% reduction. Other common compression algorithms were either worse or very slightly better. So I don't think we need anything smarter than `gzip` at least.
+
+I think calling `gunzip` as a subprocess or linking in `libdeflate` is too cheaty. *Maybe* I'll do that if push comes to shove, but it doesn't feel right. I considered using the kernel crypto API instead, since it's not userland and thus feels less cheaty, because I don't need to rely on FHS or whatever, but it looks like Linux doesn't export compression to userland. Shame.
+
+That leaves manually implemented compression. What do demosceners use for this, anyway?
+
+Ideas from https://fgiesen.wordpress.com/2011/01/24/x86-code-compression-in-kkrunchy/:
+
+- LZ is probably fine.
+- A filter can be used to make `jmp`s and `call`s with 32-bit offsets easier to compress: store the absolute target address instead of the offset. We have almost no big `jmp`s, and almost every `call` is to `read_uint`, so we could special-case just that one.
+- `icebp` is a good escape code.
+- Splitting streams is useful, but I don't know how to fit it in little code.
+
+Ideas from https://yupferris.github.io/blog/2020/08/31/c64-4k-intro-packer-deep-dive.html#squishys-decompressor-compressor:
+
+- LZSS optimal parse.
+- Maybe some other ideas? It's tuned for 4k, but uses rANS and model coding, which I would've expected to be impossible at this size.
+
+https://in4k.github.io/wiki/crinkler mentions PPM as a possible option for 4k demos.
+
+Random thoughts from Yuki: use parts of the decompressor and its ELF header as the initial source for LZ matches. Might also embed decompressor into unused space in the ELF headers by hand.
+
+https://code4k.blogspot.com/2010/12/crinkler-secrets-4k-intro-executable.html says Crinkler uses a ton of RAM to reduce hash table collisions. I think it's also just slow?
+
+Crinkler supposedly uses similar methods to the PAQ family. I tried `zpaq` for comparison, but it produced a 3175-byte archive -- probably due to all the headers. Tried `paq8l` from https://github.com/JohannesBuchner/paq, got 1946 bytes (50% compression rate). That's more like it. The crinkler decompressor is certainly smaller than 500 bytes, so it's clearly better than `gzip`, at least ignoring performance and RAM consumption. It's probably at least worthwhile seeing if I can apply cheaper similar methods.
+
+Here's the Crinkler decoder: https://github.com/runestubbe/Crinkler/blob/31d2354341243caf896ca9ae8ce9b3458d6be5ce/source/Crinkler/modules/header30.asm. It targets 32-bit x86 and relies on `pusha`, absent from x86-64, so I can't use it directly, but it's a good source of inspiration. The general idea, just like described in https://code4k.blogspot.com/2010/12/crinkler-secrets-4k-intro-executable.html, is having multiple models predicting the next bit from the bits parsed in the current byte + a subset of previous bytes, and then mix those models' predictions with power-of-two weights to get the final probability. It uses `crc32` as the hash.
+
+Another project to take a look at: https://github.com/temisu/oneKpaq. Interestingly, this one uses the FPU. As far as I can tell, it doesn't use it for AC itself -- only for the logistic mixer. Here's the gist of it, at least as far as I can tell: if `c0` and `c1` are the counts of zeros and ones according to a model, then using `(c0*w + ...) / (c1*w + ...)`, like Crinkler, prioritizes models with higher counts, which is kind of unfair. Geometrically averaging `c0/c1` instead is better in this sense. What I don't get is why the mixing needs to be geometric and not just `c0/(c0+c1)*w + ...`. That sounds simpler and still has a chance to work well...
+
+My thoughts: take the general idea from Crinkler, replace per-byte `crc32` with a single `crc64`, replace AC with rANS, and play around with different mixers. Hopefully we can do that tomorrow with Yuki.
