@@ -110,6 +110,9 @@ fn main() {
 
             // try remove
             for i in 0..model {
+                if !models[i] {
+                    continue;
+                }
                 models[i] = false;
                 let next_size = compress_with_models(&bytes, &models);
                 if next_size >= size {
