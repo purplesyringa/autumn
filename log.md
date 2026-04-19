@@ -1261,3 +1261,17 @@ Here's the Crinkler decoder: https://github.com/runestubbe/Crinkler/blob/31d2354
 Another project to take a look at: https://github.com/temisu/oneKpaq. Interestingly, this one uses the FPU. As far as I can tell, it doesn't use it for AC itself -- only for the logistic mixer. Here's the gist of it, at least as far as I can tell: if `c0` and `c1` are the counts of zeros and ones according to a model, then using `(c0*w + ...) / (c1*w + ...)`, like Crinkler, prioritizes models with higher counts, which is kind of unfair. Geometrically averaging `c0/c1` instead is better in this sense. What I don't get is why the mixing needs to be geometric and not just `c0/(c0+c1)*w + ...`. That sounds simpler and still has a chance to work well...
 
 My thoughts: take the general idea from Crinkler, replace per-byte `crc32` with a single `crc64`, replace AC with rANS, and play around with different mixers. Hopefully we can do that tomorrow with Yuki.
+
+---
+
+More thoughts on compression: Crinkler is very aggressive on adjusting probabilities: if the bit is 0, it increments `c0` and halves `c1`, and vice versa, so `c0/c1` is either approximately doubled or halved. Could we maybe just insert 1 or 0 as the top bit of the probability, shifting out the LSB? That *feels* like it can work.
+
+Ian shared a cool target. If we could fit the program in 2953 bytes as opposed to 4k, it'd fit in a QR code. This is a tighter bound, but it still leaves space for some necessary features, without entirely undermining the point of the challenge by allowing a complex interpreter. I think it's better to pivot in that direction. And QR codes don't have built-in compression, so it's still fun to work on.
+
+I'll discuss this with Yuki in more detail later on.
+
+Update: Yuki wrote a compressor. It works modulo AC/ANS, but the estimate so far is 2139 bytes. This is not quite PAQ level, but it's better than `gzip` and likely about as good as you can get. The major part is context modeling and mixing. We did end up using `crc64`, as well as reducing the context to the last 7 bytes as opposed to 8 to simplify hashing. It requires 32 MiB of memory for the hash table, but that can be tweaked if necessary, and it feels much cheaper than Crinkler. We didn't end up using any clever algorithms to detect weights; in fact, hard-coding a weight of `0` for all models worked just fine and should simplify the decoder. We used the Crinkler-style `(c0*w + ...) / (c1*w + ...)` mixer and decided against dynamically increasing the weight of perfect models. The code can be run as follows:
+
+```shell
+RUSTFLAGS="-C target-feature=+avx" cargo run --release
+```
