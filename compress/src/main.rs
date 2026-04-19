@@ -75,12 +75,26 @@ fn compress_with_models(bytes: &[u8], models: &[bool; 128]) -> f64 {
                 );
                 c0 += c.c0 as usize;
                 c1 += c.c1 as usize;
-                c.learn(bit);
             }
 
             let p = (if bit == 0 { c0 } else { c1 }) as f64 / (c0 + c1) as f64;
             // eprintln!("{p}");
             size -= p.log2();
+
+            for model in models
+                .iter()
+                .enumerate()
+                .filter(|(_i, v)| **v)
+                .map(|(i, _v)| i)
+            {
+                stats
+                    .get_mut(
+                        model as u8,
+                        apply_model_mask(prev_bytes, model as u8),
+                        next_byte,
+                    )
+                    .learn(bit);
+            }
 
             next_byte = next_byte * 2 + bit;
         }
