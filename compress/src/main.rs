@@ -16,7 +16,7 @@ impl Counter {
     #[inline]
     fn adjust(cyes: &mut usize, cno: &mut usize) {
         *cyes += 1;
-        *cno = cno.div_ceil(2);
+        *cno /= 2;
     }
     pub fn add_zero(&mut self) {
         Self::adjust(&mut self.c0, &mut self.c1)
@@ -65,8 +65,8 @@ fn compress_with_models(bytes: &[u8], models: &[bool; 256]) -> f64 {
         for bit_index in (0..8).rev() {
             let bit = (byte >> bit_index) & 1;
 
-            let mut c0 = 0;
-            let mut c1 = 0;
+            let mut c0 = 1;
+            let mut c1 = 1;
             for model in models
                 .iter()
                 .enumerate()
@@ -74,9 +74,9 @@ fn compress_with_models(bytes: &[u8], models: &[bool; 256]) -> f64 {
                 .map(|(i, _v)| i)
             {
                 let c = stats[model].get_mut(apply_model_mask(prev_bytes, model as u8), next_byte);
-                let w = model.count_ones() as usize + 1;
-                c0 += c.c0 * w;
-                c1 += c.c1 * w;
+                let w = model.count_ones() as usize + (c.c0 == 0 || c.c1 == 0) as usize * 2;
+                c0 += c.c0 << w;
+                c1 += c.c1 << w;
                 c.learn(bit);
             }
 
