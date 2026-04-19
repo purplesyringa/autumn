@@ -1,12 +1,12 @@
 #[derive(Clone, Copy)]
 struct Counter {
-    c0: u16,
-    c1: u16,
+    c0: u8,
+    c1: u8,
 }
 
 impl Counter {
     #[inline]
-    fn adjust(cyes: &mut u16, cno: &mut u16) {
+    fn adjust(cyes: &mut u8, cno: &mut u8) {
         *cyes += 1;
         if *cno >= 2 {
             *cno /= 2;
