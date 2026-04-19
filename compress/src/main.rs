@@ -16,7 +16,7 @@ impl Counter {
     #[inline]
     fn adjust(cyes: &mut usize, cno: &mut usize) {
         *cyes += 1;
-        if *cno > 1 {
+        if *cno >= 2 {
             *cno /= 2;
         }
     }
