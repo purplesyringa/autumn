@@ -84,9 +84,8 @@ fn compress_with_models(bytes: &[u8], models: &[bool; 128]) -> f64 {
                     apply_model_mask(prev_bytes, model as u8),
                     next_byte,
                 );
-                let w = model.count_ones() as usize; // + (c.c0 == 0 || c.c1 == 0) as usize * 2;
-                c0 += (c.c0 as usize) << w;
-                c1 += (c.c1 as usize) << w;
+                c0 += c.c0 as usize;
+                c1 += c.c1 as usize;
                 c.learn(bit);
             }
 
