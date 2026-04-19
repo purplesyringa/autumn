@@ -1,15 +1,7 @@
-use std::collections::HashMap;
-
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 struct Counter {
     c0: usize,
     c1: usize,
-}
-
-impl Default for Counter {
-    fn default() -> Self {
-        Self { c0: 0, c1: 0 }
-    }
 }
 
 impl Counter {
@@ -35,17 +27,26 @@ impl Counter {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 struct ModelCounter {
     // masked past bytes, current in-progress byte
-    map: HashMap<u64, Counter>,
+    map: Box<[Counter; const { 1 << 20 }]>,
+}
+
+impl Default for ModelCounter {
+    fn default() -> Self {
+        Self {
+            map: Box::new([Counter { c0: 0, c1: 0 }; _]),
+        }
+    }
 }
 
 impl ModelCounter {
     fn get_mut(&mut self, past_bytes: u64, next_byte: u8) -> &mut Counter {
-        self.map
-            .entry(past_bytes << 8 | next_byte as u64)
-            .or_default()
+        let hash =
+            unsafe { core::arch::x86_64::_mm_crc32_u64(0, past_bytes << 8 | next_byte as u64) };
+        let key = hash as usize % self.map.len();
+        &mut self.map[key]
     }
 }
 
