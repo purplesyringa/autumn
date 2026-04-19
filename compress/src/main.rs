@@ -55,6 +55,12 @@ fn compress_with_models(bytes: &[u8], models: &[bool; 128]) -> f64 {
     let mut size = 0.;
     let mut stats = ModelCounter::default();
     let mut prev_bytes = 0;
+    let models = models
+        .iter()
+        .enumerate()
+        .filter(|(_i, v)| **v)
+        .map(|(i, _v)| i as u8)
+        .collect::<Vec<_>>();
     for byte in bytes {
         let mut next_byte = 1;
         for bit_index in (0..8).rev() {
@@ -62,17 +68,8 @@ fn compress_with_models(bytes: &[u8], models: &[bool; 128]) -> f64 {
 
             let mut c0: usize = 1;
             let mut c1: usize = 1;
-            for model in models
-                .iter()
-                .enumerate()
-                .filter(|(_i, v)| **v)
-                .map(|(i, _v)| i)
-            {
-                let c = stats.get_mut(
-                    model as u8,
-                    apply_model_mask(prev_bytes, model as u8),
-                    next_byte,
-                );
+            for model in &models {
+                let c = stats.get_mut(*model, apply_model_mask(prev_bytes, *model), next_byte);
                 c0 += c.c0 as usize;
                 c1 += c.c1 as usize;
             }
@@ -81,18 +78,9 @@ fn compress_with_models(bytes: &[u8], models: &[bool; 128]) -> f64 {
             // eprintln!("{p}");
             size -= p.log2();
 
-            for model in models
-                .iter()
-                .enumerate()
-                .filter(|(_i, v)| **v)
-                .map(|(i, _v)| i)
-            {
+            for model in &models {
                 stats
-                    .get_mut(
-                        model as u8,
-                        apply_model_mask(prev_bytes, model as u8),
-                        next_byte,
-                    )
+                    .get_mut(*model, apply_model_mask(prev_bytes, *model), next_byte)
                     .learn(bit);
             }
 
@@ -101,7 +89,7 @@ fn compress_with_models(bytes: &[u8], models: &[bool; 128]) -> f64 {
         prev_bytes = prev_bytes << 8 | *byte as u64;
     }
 
-    size / 8. + models.iter().filter(|v| **v).count() as f64
+    size / 8. + models.len() as f64
 }
 
 fn main() {
