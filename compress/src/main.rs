@@ -30,7 +30,7 @@ impl Counter {
 #[derive(Clone)]
 struct ModelCounter {
     // masked past bytes, current in-progress byte
-    map: Box<[Counter; const { 1 << 20 }]>,
+    map: Box<[Counter; const { 1 << 24 }]>,
 }
 
 impl Default for ModelCounter {
@@ -42,9 +42,10 @@ impl Default for ModelCounter {
 }
 
 impl ModelCounter {
-    fn get_mut(&mut self, past_bytes: u64, next_byte: u8) -> &mut Counter {
+    fn get_mut(&mut self, model: u8, past_bytes: u64, next_byte: u8) -> &mut Counter {
         let hash =
-            unsafe { core::arch::x86_64::_mm_crc32_u64(0, past_bytes << 8 | next_byte as u64) };
+            unsafe { core::arch::x86_64::_mm_crc32_u64(0, past_bytes << 8 | next_byte as u64) }
+                ^ model as u64;
         let key = hash as usize % self.map.len();
         &mut self.map[key]
     }
@@ -63,7 +64,7 @@ fn apply_model_mask(prev_bytes: u64, model: u8) -> u64 {
 // TODO: weights (as popcnt)?
 fn compress_with_models(bytes: &[u8], models: &[bool; 128]) -> f64 {
     let mut size = 0.;
-    let mut stats = core::array::from_fn::<_, 128, _>(|_| ModelCounter::default());
+    let mut stats = ModelCounter::default();
     let mut prev_bytes = 0;
     for byte in bytes {
         let mut next_byte = 1;
@@ -78,7 +79,11 @@ fn compress_with_models(bytes: &[u8], models: &[bool; 128]) -> f64 {
                 .filter(|(_i, v)| **v)
                 .map(|(i, _v)| i)
             {
-                let c = stats[model].get_mut(apply_model_mask(prev_bytes, model as u8), next_byte);
+                let c = stats.get_mut(
+                    model as u8,
+                    apply_model_mask(prev_bytes, model as u8),
+                    next_byte,
+                );
                 let w = model.count_ones() as usize; // + (c.c0 == 0 || c.c1 == 0) as usize * 2;
                 c0 += c.c0 << w;
                 c1 += c.c1 << w;
