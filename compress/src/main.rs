@@ -8,6 +8,9 @@ impl Counter {
     pub fn learn(&mut self, bit: u8) {
         self.c0 += 1;
         self.c1 += 1;
+        if self.c0 == 0 {
+            self.c1 += 1;
+        }
         if bit == 0 {
             self.c1 /= 2;
         } else {
