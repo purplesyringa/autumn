@@ -1275,3 +1275,60 @@ Update: Yuki wrote a compressor. It works modulo AC/ANS, but the estimate so far
 ```shell
 RUSTFLAGS="-C target-feature=+avx" cargo run --release
 ```
+
+---
+
+I'll work on something other than compression for now. I've implemented most of the Wasm 1.0 operations, save for `else`. I still haven't implemented some float conversions (`0xfc 0x00` to `0xfc 0x07`), but those aren't part of Wasm 1.0. I want to validate that what I've implemented so far works.
+
+I need a test suite. Wasm has an official one at https://github.com/WebAssembly/spec/tree/main/test, but it tests *everything*. Although I support many instructions, I don't support many structural features, like:
+
+- Importing and exporting tables, memory, and globals.
+
+Okay, on a second thought, that's the only thing from Wasm 1.0 that I don't support.
+
+Test files look like this:
+
+```
+(module <...>)
+(assert_* ...)
+...
+```
+
+...so a module is defined, and then assertions are run. I grepped the testsuite for `(export` and `(import`, and it does seem like it requires tables, memory, and globals, but perhaps I could work around this if I just perform linking preemptively.
+
+I'm confused how to run the tests though. There's a harness, but I don't see a runner. https://github.com/WebAssembly/spec/blob/main/test/harness/testharness.js defines some `assert_*` functions, but where does it run the Wasm code?
+
+https://web-platform-tests.org/writing-tests/testharness-api.html According to this link, it's just a general-puprose harness.
+
+https://github.com/WebAssembly/spec/blob/main/test/harness/sync_index.js looks like the real deal: it has a call to `new WebAssembly.Module`. Looks like it provides methods like `print_*` as imports. But I don't see how the `(assert_return ...)` call in WAST is rewritten to a call of the JS function `assert_return`.
+
+There's an ML intepreter [here](https://github.com/WebAssembly/spec/tree/main/interpreter). Looks like it can
+
+> *export* test scripts to self-contained JavaScript test cases
+
+There's [building documentation](https://github.com/WebAssembly/spec/blob/f9c743aeccadabbcdf7b05508b95d753d9fa1bcd/spectec/README.md), which basically corresponds to:
+
+- Install `opaml`
+- `opaml init`
+- `opaml install dune menhir mdx zarith`
+- `make -C intepreter`
+
+```
+$ ./interpreter/wasm
+wasm 3.0.0 reference interpreter
+> ^C
+```
+
+I have a choice between using the `.bin.wast` output or the `.js` output. Both contain the built Wasm modules in binary form and then call `assert_*`.
+
+Initially, I thought using JS would probably be easier. But now I'm unsure. Since I model is WASI, which loads a module, executes `_start`, and then exits, I don't know how I'm supposed to execute different functions from the module multiple times. I think it makes more sense to implement `assert_*`s in Wasm and move them to a `_start` function that performs the actual testing. It's a little less correct, but I think I'll catch bugs in the harness itself quickly if I suddenly get 100% passing tests or something.
+
+The issue is how to perform this rewrite. I don't know OCaml, and while WAST is technically just LISP, I don't know if I can implement it 100% faithfully. Luckily, it looks like there's an official [Rust library](https://docs.rs/wast/latest/wast/struct.Wast.html) for parsing WAST.
+
+I'm going to skip all validation tests and sanity checks, at least for now. That means no `assert_malformed`, `assert_invalid`, `assert_exhaustion`, or `assert_unlinkable`. I'm also going to skip quoted modules, since parsing them with `wast` is a mess, and binary modules, since they're almost exclusively used to test validation, and that's not something I do right now.
+
+`wast` doesn't implement `Clone` for many types where it'd be both useful and easy. Why?? Looked at it a bit more and it seems like `module define` is used very rarely, so again, I can only handle `module` and not care about instantiations.
+
+I'll also skip `assert_trap`, since there's no built-in `catch` instruction, and the traps are usually used to detect OOB accesses, which, again, I don't implement yet. This leaves just `invoke` and `assert_return`.
+
+Took me a while, but I extracted 49 tests into pure Wasm binaries (out of 105 related tests in total). All but four pass under `wasmtime`, whereas three fail due to unimplemented `spectest`, and another one fails due to lousy handling of `externref` in my test generator. Anyway, *zero* of them pass under `interp-small`. Jesus Christ.

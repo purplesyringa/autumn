@@ -1,0 +1,11 @@
+[package]
+name = "wast-transformer"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.102"
+bumpalo = "3.20.2"
+tempfile = "3.27.0"
+wast = "247.0.0"
+# wast = { git = "https://github.com/purplesyringa/wasm-tools", version = "247.0.0", branch = "derive-clone" }
