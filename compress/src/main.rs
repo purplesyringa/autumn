@@ -8,7 +8,7 @@ struct Counter {
 
 impl Default for Counter {
     fn default() -> Self {
-        Self { c0: 1, c1: 1 }
+        Self { c0: 0, c1: 0 }
     }
 }
 
@@ -16,7 +16,9 @@ impl Counter {
     #[inline]
     fn adjust(cyes: &mut usize, cno: &mut usize) {
         *cyes += 1;
-        *cno /= 2;
+        if *cno > 1 {
+            *cno /= 2;
+        }
     }
     pub fn add_zero(&mut self) {
         Self::adjust(&mut self.c0, &mut self.c1)
