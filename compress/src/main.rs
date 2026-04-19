@@ -1,12 +1,12 @@
 #[derive(Clone, Copy)]
 struct Counter {
-    c0: usize,
-    c1: usize,
+    c0: u16,
+    c1: u16,
 }
 
 impl Counter {
     #[inline]
-    fn adjust(cyes: &mut usize, cno: &mut usize) {
+    fn adjust(cyes: &mut u16, cno: &mut u16) {
         *cyes += 1;
         if *cno >= 2 {
             *cno /= 2;
@@ -71,8 +71,8 @@ fn compress_with_models(bytes: &[u8], models: &[bool; 128]) -> f64 {
         for bit_index in (0..8).rev() {
             let bit = (byte >> bit_index) & 1;
 
-            let mut c0 = 1;
-            let mut c1 = 1;
+            let mut c0: usize = 1;
+            let mut c1: usize = 1;
             for model in models
                 .iter()
                 .enumerate()
@@ -85,8 +85,8 @@ fn compress_with_models(bytes: &[u8], models: &[bool; 128]) -> f64 {
                     next_byte,
                 );
                 let w = model.count_ones() as usize; // + (c.c0 == 0 || c.c1 == 0) as usize * 2;
-                c0 += c.c0 << w;
-                c1 += c.c1 << w;
+                c0 += (c.c0 as usize) << w;
+                c1 += (c.c1 as usize) << w;
                 c.learn(bit);
             }
 
