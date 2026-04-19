@@ -91,7 +91,7 @@ fn compress_with_models(bytes: &[u8], models: &[bool; 256]) -> f64 {
         prev_bytes = prev_bytes << 8 | *byte as u64;
     }
 
-    size / 8.
+    size / 8. + models.iter().filter(|v| **v).count() as f64
 }
 
 fn main() {
@@ -124,4 +124,6 @@ fn main() {
             }
         }
     }
+    let model_list = (0..=255).filter(|i| models[*i]).collect::<Vec<_>>();
+    dbg!(model_list);
 }
