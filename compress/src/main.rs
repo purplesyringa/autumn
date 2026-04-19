@@ -5,24 +5,13 @@ struct Counter {
 }
 
 impl Counter {
-    #[inline]
-    fn adjust(cyes: &mut u8, cno: &mut u8) {
-        *cyes += 1;
-        if *cno >= 2 {
-            *cno /= 2;
-        }
-    }
-    pub fn add_zero(&mut self) {
-        Self::adjust(&mut self.c0, &mut self.c1)
-    }
-    pub fn add_one(&mut self) {
-        Self::adjust(&mut self.c1, &mut self.c0)
-    }
     pub fn learn(&mut self, bit: u8) {
+        self.c0 += 1;
+        self.c1 += 1;
         if bit == 0 {
-            self.add_zero();
+            self.c1 /= 2;
         } else {
-            self.add_one();
+            self.c0 /= 2;
         }
     }
 }
