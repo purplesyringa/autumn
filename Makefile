@@ -12,7 +12,7 @@ interp-small: interp.c table.i
 	$(CC) $< -o $@ $(OPTS) -Wall -Wextra -fno-stack-protector -nostdlib -static -fno-asynchronous-unwind-tables -T small.ld
 	strip --strip-section-headers $@
 
-table.i: interp.c
+table.i: interp.c make-table.py
 	python3 make-table.py
 
 make-rwx: make-rwx.c
