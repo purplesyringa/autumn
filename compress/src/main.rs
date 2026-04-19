@@ -77,9 +77,8 @@ fn compress_with_models(bytes: &[u8], models: &[bool; 128]) -> f64 {
                 c1 += c.c1 as usize;
             }
 
-            let p = (if bit == 0 { c0 } else { c1 }) as f64 / (c0 + c1) as f64;
-            // eprintln!("{p}");
-            size -= p.log2();
+            let p = ((if bit == 0 { c0 } else { c1 }) << 16) / (c0 + c1);
+            size -= (p as f64 / 65536.).log2();
 
             for model in &models {
                 stats
