@@ -38,12 +38,14 @@ impl Counter {
 #[derive(Clone, Default)]
 struct ModelCounter {
     // masked past bytes, current in-progress byte
-    map: HashMap<(u64, u8), Counter>,
+    map: HashMap<u64, Counter>,
 }
 
 impl ModelCounter {
-    fn get_mut(&mut self, past_bytes: u64, in_progress: u8) -> &mut Counter {
-        self.map.entry((past_bytes, in_progress)).or_default()
+    fn get_mut(&mut self, past_bytes: u64, next_byte: u8) -> &mut Counter {
+        self.map
+            .entry(past_bytes << 8 | next_byte as u64)
+            .or_default()
     }
 }
 
@@ -58,9 +60,9 @@ fn apply_model_mask(prev_bytes: u64, model: u8) -> u64 {
 }
 
 // TODO: weights (as popcnt)?
-fn compress_with_models(bytes: &[u8], models: &[bool; 256]) -> f64 {
+fn compress_with_models(bytes: &[u8], models: &[bool; 128]) -> f64 {
     let mut size = 0.;
-    let mut stats = core::array::from_fn::<_, 256, _>(|_| ModelCounter::default());
+    let mut stats = core::array::from_fn::<_, 128, _>(|_| ModelCounter::default());
     let mut prev_bytes = 0;
     for byte in bytes {
         let mut next_byte = 1;
@@ -96,10 +98,10 @@ fn compress_with_models(bytes: &[u8], models: &[bool; 256]) -> f64 {
 
 fn main() {
     let bytes = std::fs::read("../interp-small").unwrap();
-    let mut models = [false; 256];
+    let mut models = [false; 128];
     let mut size = f64::INFINITY;
     dbg!(bytes.len());
-    for model in 0..=255 {
+    for model in 0..=127 {
         models[model] = true;
         let next_size = compress_with_models(&bytes, &models);
         if next_size >= size {
@@ -124,6 +126,6 @@ fn main() {
             }
         }
     }
-    let model_list = (0..=255).filter(|i| models[*i]).collect::<Vec<_>>();
+    let model_list = (0..=127).filter(|i| models[*i]).collect::<Vec<_>>();
     dbg!(model_list);
 }
