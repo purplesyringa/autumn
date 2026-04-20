@@ -1,5 +1,6 @@
 interp
 interp-debug
 interp-small
+interp-small.bin
 make-rwx
 table.i
