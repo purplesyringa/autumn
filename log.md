@@ -1376,7 +1376,7 @@ Fixed, 21 tests pass now.
 
 ---
 
-A division test in `int_exprs.wast` still fails. As far as I can tell, here's the issue: while dividing `i32::MIN` by `-1` traps, taking the remainder should just return `0`. x86 doesn't merges division and remainder into one operation, so it traps as well. Yup, seems like the Wasm docs confirm this difference. How do I even begin to handle this? I think I need to manually compare the divisor with `-1` and manually return `0` in this case. Or, better yet, skip division and reuse the zero pre-stored in `rdx` as the return value.
+A division test in `int_exprs.wast` still fails. As far as I can tell, here's the issue: while dividing `i32::MIN` by `-1` traps, taking the remainder should just return `0`. x86 merges division and remainder into one operation, so it traps as well. Yup, seems like the Wasm docs confirm this difference. How do I even begin to handle this? I think I need to manually compare the divisor with `-1` and manually return `0` in this case. Or, better yet, skip division and reuse the zero pre-stored in `rdx` as the return value.
 
 ---
 
@@ -1469,7 +1469,7 @@ Found it: I used the output instead of the input in one of the expressions. It n
 
 ---
 
-`call.wast` looks interesting. It doesn't contain `exnref`s or anything like that, but still fails. Oh, nevermind, it's `memory.grow` again. Actually, I think I've fixed pretty much all tests that don't rely on deliberately implemented features.
+`call.wast` looks interesting. It doesn't contain `exnref`s or anything like that, but still fails. Oh, nevermind, it's `memory.grow` again. Actually, I think I've fixed pretty much all tests that don't rely on deliberately unimplemented features.
 
 During the fixes, the code grew from 3840 bytes to 4008 bytes. I can't tell where exactly this increase came from -- it's probably just minor stuff here and there. All the fixes so far have been pretty much unavoidable, but I need to think twice before introducing further changes just for compatibility with the test suite -- every byte I spend on that is a byte I can't spend on implementing WASI syscalls.
 
@@ -1479,7 +1479,7 @@ Implemented `fd_read`, 4104 bytes.
 
 Implemented `get_random`, 4168 bytes.
 
-Stuck on implemented `memory.fill` now. Implemented it, but got `unreachable`. The stacktrace:
+Stuck on implementing `memory.fill` now. Implemented it, but got `unreachable`. The stacktrace:
 
 ```
 $_start
@@ -1533,7 +1533,7 @@ There are many leading and trailing zeros in the args list, even though those ar
 
 Perhaps it's useful to look at the parsing code in `main`, since it's the largest function. The import logic has grown in size after I added more syscall handlers, and perhaps it makes sense to make it data-driven.
 
-I can't prevent the size from increasing... that's as bit horrifying. Here's another idea: maybe encoding the symbols as string is what takes space, and we could use short hashes instead. That finally works: a `crc32` hash of the first 8 bytes of the symbol name, mixed with the name's length, seems to be a good enough hash. The uncompressed size is now 4312 bytes, and the approximate compressed size is 2460 bytes.
+I can't prevent the size from increasing... that's as bit horrifying. Here's another idea: maybe encoding the symbols as string is what takes space, and we could use short hashes instead. That finally works: a `crc32` hash of the first 8 bytes of the symbol name, mixed with the name's length and truncated to 16 bits, seems to be a good enough hash. The uncompressed size is now 4312 bytes, and the approximate compressed size is 2460 bytes.
 
 ---
 

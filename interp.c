@@ -582,7 +582,6 @@ DEF(
         "roundsd $0, %0, %0"
         : "+x"(*stack_head)
         : [size_byte]"r"(size_byte), [mode]"r"(arg)
-        : "memory"
     );
 }
 
