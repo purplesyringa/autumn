@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <fcntl.h>
 #include <immintrin.h>
 #include <stdint.h>
@@ -39,11 +40,14 @@ static void *memset(void *s, int c, size_t n) {
     return orig_s;
 }
 
-#define SCASB(ptr, count, value) asm ("repne scasb" : "+D"(ptr), "+c"(count) : "a"((unsigned char)value) : "flags");
-
 static size_t strlen(const char *s) {
     unsigned long count = -1;
-    SCASB(s, count, 0);
+    asm (
+        "repne scasb"
+        : "+D"(s), "+c"(count)
+        : "a"(0)
+        : "flags"
+    );
     return -2 - count;
 }
 
@@ -828,6 +832,35 @@ static void call_func(unsigned funcidx) {
     };
 }
 
+#define N_ERRNOS 10
+static char errno_map[N_ERRNOS * 2] = {
+    (char)-EAGAIN, (char)-EINTR, (char)-EBADF, (char)-EIO,
+    (char)-EISDIR, (char)-EDQUOT, (char)-EFBIG, (char)-ENOSPC,
+    (char)-EPIPE, (char)-EPERM,
+    6, 27, 8, 29, 31, 19, 22, 51, 64, 63,
+};
+
+__attribute__((noinline))
+static unsigned long map_to_errno(long out) {
+    if (out >= 0) {
+        return 0;
+    }
+    if ((short)out >= -255) {
+        char *ptr = errno_map;
+        unsigned long count = N_ERRNOS;
+        _Bool found;
+        asm (
+            "repne scasb"
+            : "+D"(ptr), "+c"(count), "=@cce"(found)
+            : "a"((unsigned char)out)
+        );
+        if (found) {
+            return *(ptr - 1 + N_ERRNOS);
+        }
+    }
+    return 28; // EINVAL
+}
+
 #define DEF_IMPORT(name) void name() // deliberately not `static` to allow asm to reference this
 
 static void fd_op(int syscallno) {
@@ -850,12 +883,9 @@ static void fd_op(int syscallno) {
     }
     ssize_t native_out = syscall3(syscallno, fd, (long)native_iovs, iovs_len);
 
-    unsigned long wasi_out;
-    if (native_out < 0) {
-        wasi_out = -native_out;
-    } else {
+    unsigned long wasi_out = map_to_errno(native_out);
+    if (native_out >= 0) {
         __builtin_memcpy(memory + n_processed, &native_out, 4);
-        wasi_out = 0;
     }
 
     *stack_head = wasi_out;
@@ -871,16 +901,13 @@ DEF_IMPORT(fd_write) {
 DEF_IMPORT(random_get) {
     unsigned buf_len = *stack_head++;
     unsigned buf = *stack_head;
-    while (buf_len > 0) {
-        ssize_t native_out = syscall3(SYS_getrandom, (long)(memory + buf), buf_len, 0);
-        if (native_out < 0) {
-            *stack_head = -native_out;
-            return;
-        }
+    ssize_t native_out;
+    do {
+        native_out = syscall3(SYS_getrandom, (long)(memory + buf), buf_len, 0);
         buf_len -= native_out;
         buf += native_out;
-    }
-    *stack_head = 0;
+    } while (native_out >= 0);
+    *stack_head = map_to_errno(native_out);
 }
 
 static char **environ, **args;
@@ -916,7 +943,7 @@ DEF_IMPORT(proc_exit) {
     __builtin_trap();
 }
 DEF_IMPORT(proc_raise) {
-    *stack_head = -syscall2(SYS_kill, syscall0(SYS_getpid), *stack_head);
+    *stack_head = map_to_errno(syscall2(SYS_kill, syscall0(SYS_getpid), *stack_head));
 }
 
 int main(int argc, char **argv, char **envp) {

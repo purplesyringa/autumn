@@ -1557,3 +1557,28 @@ That's 3948/2444, about +70 bytes compressed.
 ---
 
 Perhaps the compression rate suffers because some data is located before code, and the compressor can't unlearn patterns and gain confidence. Let's try putting data last. That's 3950 bytes uncompressed, 2425 bytes compressed. So slightly better and probably meaningful enough, but not as good as it could be. Probably worth trying to reset the models between `.text` and `.rodata`.
+
+---
+
+So I'm a little concerned about something. I pass `errno` directly from Linux to WASI. But are they actually compatible?
+
+Here's a list of WASI errnos: https://docs.rs/wasip1/1.0.0/src/wasip1/lib_generated.rs.html#231-307. And yup, it completely differs from x86_64... I wonder if there's an official mapping anywhere? How does `wasmtime` handle this?
+
+For instance, here's the mapping for FS errors: https://github.com/bytecodealliance/wasmtime/blob/3a1920b1b1c6ec7d09e7f8023e0fdbb44eab39aa/crates/wasi/src/filesystem.rs#L379-L407. That's... messy. We only care about translating errors from the following syscalls:
+
+- `readv`
+- `writev`
+- `getrandom`
+- `kill` (self)
+
+As far as I can tell, that corresponds to the following list of errors:
+
+- `EAGAIN`, `EWOULDBLOCK` (same thing), `EINTR`, `EINVAL` (common among many syscalls)
+- `EBADF`, `EIO`, `EISDIR` (common among file-related syscalls)
+- `EDQUOT`, `EFBIG`, `ENOSPC`, `EPIPE` (writing)
+- `EPERM` (when file seals prevent writing)
+- `EDESTADDRREQ` (writing to sockets, probably don't need to support, if anyone provides an fd socket that's their problem)
+- `EFAULT` (common, but we don't support OOB detection, so not worth handling)
+- `ENOSYS` (also not worth handling)
+
+We can probably map everything else to `EINVAL`. Implemented this, 4038/2491 bytes.
