@@ -180,9 +180,9 @@ DEF(br_table, 0x0e) {
         }
     }
     for (unsigned i = 0; i <= n_labels; i++) {
-        unsigned level = read_uint();
+        unsigned labelidx = read_uint();
         if (i == index) {
-            break_level = level;
+            break_level = labelidx + 1;
         }
     }
 }
