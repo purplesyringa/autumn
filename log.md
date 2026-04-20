@@ -1444,3 +1444,15 @@ Here's the new failure:
 ```
 
 Wait, what? `je` performed a jump? Oh, yeah, that makes total sense -- incomparable values are CF=ZF=1. I need to swap `jp` and `je`. 26 tests pass now.
+
+---
+
+Well, okay, not quite -- `f64_cmp.wast` still fails. In function `0x666`, no less. Which is...
+
+```
+(assert_return (invoke "gt" (f64.const -0x0p+0) (f64.const -nan)) (i32.const 0))
+```
+
+Weird. Okay, nevermind, not that weird: I use `cmppd` instead of `vcmppd`, which means part of the `imm8` is ignored and I end up performing some garbage comparison -- more specifically, "greater or unordered" instead of "greater".
+
+Replaced it with patched `vcmppd`, but it got even worse. So `vcmpp[ds]` is weird: it uses the same byte to represent `d`/`s` and one of the arguments (the first source, to be more specific). This effectively means we're forced to hard-code that register. 28 tests now pass.

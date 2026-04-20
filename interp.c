@@ -471,16 +471,15 @@ DEF(
 ) {
     PARSED;
     unsigned long *b = stack_head++;
+    unsigned char size_byte = 0xf8 + (opcode >= 0x61); // f64
     unsigned long out;
     asm (
+        "mov %[size_byte], 1f + 1(%%rip);"
         "mov %[imm8], 1f + 4(%%rip);"
-        "cmp $0x61, %[opcode];"
-        "jb 1f + 1;" // f32
         "1:"
-        "cmppd $0, %[b], %[a]"
-        : "=x"(out)
-        : [a]"0"(*stack_head), [b]"x"(*b), [opcode]"r"(opcode), [imm8]"r"(arg)
-        : "flags"
+        "vcmppd $0, %[b], %[a], %[out]"
+        : [out]"=x"(out)
+        : [a]"Yz"(*stack_head), [b]"x"(*b), [size_byte]"r"(size_byte), [imm8]"r"(arg)
     );
     *stack_head = out & 1;
 }
