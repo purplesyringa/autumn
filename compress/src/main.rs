@@ -43,39 +43,87 @@ impl ModelCounter {
     }
 }
 
-struct Encoder<W: FnMut(u8)> {
-    write_byte: W,
-    l: u32,
-    r: u32,
+struct Encoder {
+    bits: Vec<bool>,
+    left: u32,
+    range: u32,
 }
 
-impl<W: FnMut(u8)> Encoder<W> {
-    fn new(write_byte: W) -> Self {
+impl Encoder {
+    pub fn new() -> Self {
         Self {
-            write_byte,
-            l: 0,
-            r: u32::MAX,
+            bits: vec![],
+            left: 0,
+            range: 1 << 31,
         }
     }
-    fn encode_bit(&mut self, bit: u8, prob0: u16) {
-        let mid = (self.l as u64 + (((self.r - self.l) as u64 * prob0 as u64) >> 16)) as u32;
+
+    fn increment(&mut self) {
+        for bit in self.bits.iter_mut().rev() {
+            if !*bit {
+                *bit = true;
+                break;
+            }
+            *bit = false;
+        }
+    }
+
+    pub fn encode_bit(&mut self, bit: u8, prob0: u16) {
+        let mid = ((self.range as u64 * prob0 as u64) >> 16) as u32;
         if bit == 0 {
-            self.r = mid;
+            self.range = mid;
         } else {
-            self.l = mid + 1;
+            let carry;
+            (self.left, carry) = self.left.overflowing_add(mid);
+            if carry {
+                self.increment();
+            }
+            self.range -= mid;
         }
-        while (self.l >> 24) == (self.r >> 24) {
-            (self.write_byte)((self.l >> 24) as u8);
-            self.l <<= 8;
-            self.r <<= 8;
-            self.r += 0xff;
+        while self.range < (1 << 31) {
+            self.bits.push((self.left >> 31) == 1);
+            self.left <<= 1;
+            self.range <<= 1;
         }
     }
-    fn finish(mut self) {
-        self.l
-            .to_be_bytes()
-            .iter()
-            .for_each(|b| (self.write_byte)(*b))
+
+    fn finalize(&mut self) {
+        if self.left.overflowing_add(self.range - 1).1 {
+            self.increment();
+        } else {
+            self.bits.push(true);
+        }
+    }
+
+    fn pad_to_eight(&mut self) {
+        let pad = (8 - self.bits.len()) % 8;
+        for _ in 0..pad {
+            self.bits.push(false);
+        }
+    }
+
+    pub fn finish(mut self) -> Vec<u8> {
+        self.finalize();
+        self.pad_to_eight();
+
+        let (bytes_bits, remainder) = self.bits.as_chunks::<8>();
+        assert!(remainder.is_empty());
+
+        let mut out = vec![];
+        for &[b0, b1, b2, b3, b4, b5, b6, b7] in bytes_bits {
+            out.push(
+                (b0 as u8)
+                    + ((b1 as u8) << 1)
+                    + ((b2 as u8) << 2)
+                    + ((b3 as u8) << 3)
+                    + ((b4 as u8) << 4)
+                    + ((b5 as u8) << 5)
+                    + ((b6 as u8) << 6)
+                    + ((b7 as u8) << 7),
+            );
+        }
+
+        out
     }
 }
 
@@ -91,8 +139,7 @@ fn apply_model_mask(prev_bytes: u64, model: u8) -> u64 {
 
 // TODO: weights (as popcnt)?
 fn compress_with_models(bytes: &[u8], models: &[bool; 128], size_only: bool) -> (f64, Vec<u8>) {
-    let mut out = vec![];
-    let mut encoder = Encoder::new(|b| out.push(b));
+    let mut encoder = Encoder::new();
     let mut size = 0.;
     let mut stats = ModelCounter::default();
     let mut prev_bytes = 0;
@@ -133,9 +180,7 @@ fn compress_with_models(bytes: &[u8], models: &[bool; 128], size_only: bool) -> 
         prev_bytes = prev_bytes << 8 | *byte as u64;
     }
 
-    if !size_only {
-        encoder.finish();
-    }
+    let out = if !size_only { encoder.finish() } else { vec![] };
 
     (size / 8. + models.len() as f64, out)
 }
