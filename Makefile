@@ -16,3 +16,6 @@ table.i: interp.c make-table.py
 
 make-rwx: make-rwx.c
 	$(CC) $< -o $@ -O2
+
+compressed.bin: interp-small.bin
+	cd compress && cargo run --release

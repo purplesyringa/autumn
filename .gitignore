@@ -4,3 +4,5 @@ interp-small
 interp-small.bin
 make-rwx
 table.i
+models.bin
+compressed.bin
