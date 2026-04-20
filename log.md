@@ -1360,3 +1360,16 @@ This code is *way* too complex to debug for now. Let's try something else.
 Yay, finally a benevolent bug. `local_get.wast` fails due to unaligned accesses in floating-point instructions -- I forgot to consider alignment when switching from `addsd` to `addpd` and alike. Nothing AVX can't fix, most likely.
 
 Well, not so far -- I used the SSE versions to easily strip the `66` prefix, but AVX uses a different encoding. I'll have to sacrifice a few optimizations in the few places where I inlined memory access into the ops, then. It's just a few bytes. 20 tests now pass.
+
+---
+
+`int_exprs.wast` found a bug in division. Apparently `i32.div_s (i32.const -11) (i32.const 2))` returns something other than `-5`. Oh, I see, it performed unsigned division because I populated `edx` with zero instead of a sign extension. Silly me.
+
+It's non-trivial to fix because division is implemented as part of the generic binop handler. The fundamental issue is that I *want*:
+
+- `cdo; idiv rcx` for 64-bit
+- `cdq; idiv ecx` for 32-bit
+
+...but this requires adding instructions in the 32-bit case instead of just truncating a byte. I need something that parses cleverly... wait, no, I'm stupid. I no longer force the 1-byte truncation, I have `arg` as an arbitrary offset. I can just create another entry for this.
+
+Fixed, 21 tests pass now.

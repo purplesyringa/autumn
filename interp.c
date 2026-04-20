@@ -478,9 +478,9 @@ DEF(
     0x6a = binop_add - binop_handlers + 1, // i32.add
     0x6b = binop_sub - binop_handlers + 1, // i32.sub
     0x6c = binop_mul - binop_handlers + 1, // i32.mul
-    0x6d = binop_div_s - binop_handlers + 1, // i32.div_s
+    0x6d = binop_div_s32 - binop_handlers, // i32.div_s
     0x6e = binop_div_u - binop_handlers + 1, // i32.div_u
-    0x6f = binop_rem_s - binop_handlers + 1, // i32.rem_s
+    0x6f = binop_rem_s32 - binop_handlers, // i32.rem_s
     0x70 = binop_rem_u - binop_handlers + 1, // i32.rem_u
     0x71 = binop_and - binop_handlers + 1, // i32.and
     0x72 = binop_or - binop_handlers + 1, // i32.or
@@ -493,9 +493,9 @@ DEF(
     0x7c = binop_add - binop_handlers, // i64.add
     0x7d = binop_sub - binop_handlers, // i64.sub
     0x7e = binop_mul - binop_handlers, // i64.mul
-    0x7f = binop_div_s - binop_handlers, // i64.div_s
+    0x7f = binop_div_s64 - binop_handlers, // i64.div_s
     0x80 = binop_div_u - binop_handlers, // i64.div_u
-    0x81 = binop_rem_s - binop_handlers, // i64.rem_s
+    0x81 = binop_rem_s64 - binop_handlers, // i64.rem_s
     0x82 = binop_rem_u - binop_handlers, // i64.rem_u
     0x83 = binop_and - binop_handlers, // i64.and
     0x84 = binop_or - binop_handlers, // i64.or
@@ -518,9 +518,11 @@ DEF(
         "binop_add: add %[b], %[a]; ret;"
         "binop_sub: sub %[b], %[a]; ret;"
         "binop_mul: imul %[b], %[a]; ret;"
-        "binop_div_s: idiv %[b]; ret;"
+        "binop_div_s32: cdq; jmp binop_div_s64 + 3;"
+        "binop_div_s64: cqo; idiv %[b]; ret;"
         "binop_div_u: div %[b]; ret;"
-        "binop_rem_s: idiv %[b]; mov %%rdx, %%rax; ret;"
+        "binop_rem_s32: cdq; jmp binop_rem_s64 + 3;"
+        "binop_rem_s64: cqo; idiv %[b]; mov %%rdx, %%rax; ret;"
         "binop_rem_u: div %[b]; mov %%rdx, %%rax; ret;"
         "binop_and: and %[b], %[a]; ret;"
         "binop_or: or %[b], %[a]; ret;"
