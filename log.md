@@ -1432,3 +1432,15 @@ However, I can workaround this by simply indexing bytes from the end as opposed 
 ...or maybe not. GCC infers addressing via register `r13`, which doesn't support disp-less addressing, so there's a stray `disp8` that breaks indexing.
 
 24 tests pass.
+
+---
+
+Failure in `f64.wast`... due to more than 1024 tests, and thus more than 1024 functions. Sigh. Let me increase the hard-coded limit real quick...
+
+Here's the new failure:
+
+```wasm
+(assert_return (invoke "min" (f64.const -0x0p+0) (f64.const -nan:0x4000000000000)) (f64.const nan:arithmetic))
+```
+
+Wait, what? `je` performed a jump? Oh, yeah, that makes total sense -- incomparable values are CF=ZF=1. I need to swap `jp` and `je`. 26 tests pass now.

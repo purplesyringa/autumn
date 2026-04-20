@@ -93,7 +93,7 @@ unsigned long globals[1024];
 unsigned main_funcidx;
 unsigned start_funcidx = -1;
 unsigned long func_table[1024];
-struct func_info funcs[1024];
+struct func_info funcs[4096];
 unsigned n_funcs;
 unsigned char memory[2 * 1024 * 1024];
 unsigned long stack[1024];
@@ -626,10 +626,10 @@ DEF(
     asm (
         "mov %[op], 2f + 2(%%rip);"
         "cmp $0xa4, %[opcode];"
-        "jb 1f + 1;"
+        "jb 1f + 1;" // f32
         "1: ucomisd %[b], %[a];"
-        "je 2f;"
         "jp 3f;"
+        "je 2f;"
         "adc $5, %[op];"
         "jnp 5f;"
         "movq %[b], %[a];"
