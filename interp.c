@@ -352,11 +352,11 @@ DEF(
     int_unop,
     0x45 = unop_eqz - unop_handlers, // i32.eqz
     0x50 = unop_eqz - unop_handlers, // i64.eqz
-    0x67 = unop_clz - unop_handlers + 1, // i32.clz
-    0x68 = unop_ctz - unop_handlers + 1, // i32.ctz
+    0x67 = unop_clz32 - unop_handlers, // i32.clz
+    0x68 = unop_ctz32 - unop_handlers, // i32.ctz
     0x69 = unop_popcnt - unop_handlers, // i32.popcnt
-    0x79 = unop_clz - unop_handlers, // i64.clz
-    0x7a = unop_ctz - unop_handlers, // i64.ctz
+    0x79 = unop_clz64 - unop_handlers, // i64.clz
+    0x7a = unop_ctz64 - unop_handlers, // i64.ctz
     0x7b = unop_popcnt - unop_handlers, // i64.popcnt
     0x8b = unop_abs - unop_handlers + 1, // f32.abs
     0x8c = unop_neg - unop_handlers + 1, // f32.neg
@@ -381,8 +381,10 @@ DEF(
         ".pushsection .text.op;"
         "unop_handlers:"
         "unop_eqz: test %0, %0; mov $0, %k0; sete %b0; ret;"
-        "unop_clz: lzcnt %0, %0; ret;"
-        "unop_ctz: tzcnt %0, %0; ret;"
+        "unop_clz32: lzcnt %k0, %k0; ret;"
+        "unop_clz64: lzcnt %0, %0; ret;"
+        "unop_ctz32: tzcnt %k0, %k0; ret;"
+        "unop_ctz64: tzcnt %0, %0; ret;"
         "unop_popcnt: popcnt %0, %0; ret;"
         "unop_abs: btr $63, %0; ret;"
         "unop_neg: btc $63, %0; ret;"

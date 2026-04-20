@@ -1377,3 +1377,16 @@ Fixed, 21 tests pass now.
 ---
 
 A division test in `int_exprs.wast` still fails. As far as I can tell, here's the issue: while dividing `i32::MIN` by `-1` traps, taking the remainder should just return `0`. x86 doesn't merges division and remainder into one operation, so it traps as well. Yup, seems like the Wasm docs confirm this difference. How do I even begin to handle this? I think I need to manually compare the divisor with `-1` and manually return `0` in this case. Or, better yet, skip division and reuse the zero pre-stored in `rdx` as the return value.
+
+---
+
+`i32.wast` uncovered another cool bug. I had *assumed* that `lzcnt rax, rax` and `lzcnt eax, eax` differ by REX.W in the first byte, but it's actually the *second* byte:
+
+```
+0:  f3 48 0f bd c0          lzcnt  rax,rax
+5:  f3 0f bd c0             lzcnt  eax,eax
+```
+
+`0xf3` is `rep`, and that makes sense, since `lzcnt` is just `rep bsf` after all. It is a problem though, because `rep` is a legacy prefix, and legacy prefixes always need to be put before REX. As far as I can tell, this applies to `tzcnt` and `popcnt` as well. For `popcnt` specifically, the size doesn't matter, but `lzcnt` and `tzcnt` will have to be split into 32-bit and 64-bit versions.
+
+23 tests pass now.
