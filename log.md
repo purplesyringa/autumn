@@ -1522,3 +1522,15 @@ Let's try some more generic optimizations. What if we make the executable positi
 Oops, forgot to make `strlen` static. Still 4386 bytes though.
 
 Found an optimization in `int_compare` and a tiny one in `float_const`. 4354 bytes.
+
+---
+
+My next goal is to try and see if I can make the binary easier to compress, and whether it makes sense to implement RLE for opcodes despite already having PPM. I have a feeling that it might help, if only because 90% of the binary is executable code and PPM won't like having to predict differently structured data.
+
+Deinterleaving handler IDs and args didn't help, but I can try RLE now. RLE improves compression, but decoding it takes more space than it saves.
+
+There are many leading and trailing zeros in the args list, even though those args don't actually affect anything. I can overlap those prefixes and suffixes with other data. This is a slight improvement compared to normal non-interleaved args, but it's still worse than interleaved args. PPM is ridiculously good, it seems. I haven't been able to find a single optimization.
+
+Perhaps it's useful to look at the parsing code in `main`, since it's the largest function. The import logic has grown in size after I added more syscall handlers, and perhaps it makes sense to make it data-driven.
+
+I can't prevent the size from increasing... that's as bit horrifying. Here's another idea: maybe encoding the symbols as string is what takes space, and we could use short hashes instead. That finally works: a `crc32` hash of the first 8 bytes of the symbol name, mixed with the name's length, seems to be a good enough hash. The uncompressed size is now 4312 bytes, and the approximate compressed size is 2460 bytes.

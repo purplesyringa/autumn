@@ -818,6 +818,8 @@ static void call_func(unsigned funcidx) {
     };
 }
 
+#define DEF_IMPORT(name) void name() // deliberately not `static` to allow asm to reference this
+
 static void fd_op(int syscallno) {
     unsigned n_processed = *stack_head++;
     unsigned iovs_len = *stack_head++;
@@ -849,14 +851,14 @@ static void fd_op(int syscallno) {
     *stack_head = wasi_out;
 }
 
-static void fd_read() {
+DEF_IMPORT(fd_read) {
     fd_op(SYS_readv);
 }
-static void fd_write() {
+DEF_IMPORT(fd_write) {
     fd_op(SYS_writev);
 }
 
-static void random_get() {
+DEF_IMPORT(random_get) {
     unsigned buf_len = *stack_head++;
     unsigned buf = *stack_head;
     while (buf_len > 0) {
@@ -894,10 +896,10 @@ static void environ_impl(_Bool is_sizes) {
     }
     *stack_head = 0;
 }
-static void environ_sizes_get() {
+DEF_IMPORT(environ_sizes_get) {
     environ_impl(1);
 }
-static void environ_get() {
+DEF_IMPORT(environ_get) {
     environ_impl(0);
 }
 
@@ -940,19 +942,21 @@ int main(int argc, char **argv, char **envp) {
 
                 unsigned long name;
                 __builtin_memcpy(&name, p, 8);
+                if (name_len < 8) {
+                    name <<= 64 - name_len * 8;
+                }
+                unsigned long crc32 = name_len;
+                asm ("crc32 %1, %0" : "+r"(crc32) : "r"(name));
 
                 void (*func)() = NULL;
-                if (name_len == 7 && (name & 0xffffffffffffff) == 0x646165725f6466 /* fd_read */) {
-                    func = fd_read;
-                } else if (name_len == 8 && name == 0x65746972775f6466 /* fd_write */) {
-                    func = fd_write;
-                } else if (name_len == 10 && name == 0x675f6d6f646e6172 /* random_g */) {
-                    func = random_get;
-                } else if (name_len == 17 && name == 0x5f6e6f7269766e65 /* environ_ */) {
-                    func = environ_sizes_get;
-                } else if (name_len == 11 && name == 0x5f6e6f7269766e65 /* environ_ */) {
-                    func = environ_get;
+                for (unsigned short *ip = imports; ip != imports_end; ip += 2) {
+                    if (*ip == (unsigned short)crc32) {
+                        extern char _start;
+                        func = (void *)((char *)&_start + ip[1]);
+                        break;
+                    }
                 }
+
                 funcs[n_funcs++] = (struct func_info){
                     .func = (unsigned char*)func,
                     .typeidx = -1U,
@@ -1007,7 +1011,7 @@ int main(int argc, char **argv, char **envp) {
                 // printf("export %.*s\n", name_len, p);
                 unsigned long name;
                 __builtin_memcpy(&name, p, 8);
-                _Bool is_start = name_len == 6 && (name & 0xffffffffffff) == 0x74726174735f /* _start */;
+                _Bool is_start = name_len == 6 && (name << 16) == 0x74726174735f0000 /* _start */;
                 p += name_len;
                 p++; // exportdesc variant
                 unsigned index = read_uint(); // exportdesc index
