@@ -136,6 +136,7 @@ static void call_func(unsigned funcidx);
 
 #define PARSED if (break_level) return
 #define DEF(name, ...) \
+    __attribute__((section(".text"))) /* don't put op_unknown in .text.unlikely for relocations */ \
     void op_##name( \
         __attribute__((unused)) unsigned char opcode, \
         __attribute__((unused)) unsigned char arg \

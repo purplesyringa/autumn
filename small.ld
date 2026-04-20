@@ -5,7 +5,8 @@ SECTIONS {
     . = 0x400000 + SIZEOF_HEADERS;
     .text : {
         *(.text.start)
-        *(.text .text.* .data .data.* .rodata .rodata.*)
+        *(.text .text.*)
+        *(.data .data.* .rodata .rodata.*)
     }
     .bss : {
         *(.bss .bss.*) *(COMMON)

@@ -1553,3 +1553,7 @@ Okay, so it turns out WASIp1 is enormous. Just to test how bad this is, I can ad
 - `proc_raise` (arguably)
 
 That's 3948/2444, about +70 bytes compressed.
+
+---
+
+Perhaps the compression rate suffers because some data is located before code, and the compressor can't unlearn patterns and gain confidence. Let's try putting data last. That's 3950 bytes uncompressed, 2425 bytes compressed. So slightly better and probably meaningful enough, but not as good as it could be. Probably worth trying to reset the models between `.text` and `.rodata`.

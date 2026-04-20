@@ -52,14 +52,18 @@ for name in re.findall(r"DEF_IMPORT\(([\s\S]*?)\)", s):
 code = ""
 
 code += "extern unsigned short handlers[];\n"
-code += 'asm ("base_sym: handlers: .short ' + ", ".join(handlers) + '");\n'
-
 code += "extern unsigned short opcode_map[];\n"
-code += 'asm ("opcode_map: .byte ' + ", ".join(table) + '");\n'
-
 code += "extern unsigned short imports[];\n"
 code += "extern unsigned short imports_end[];\n"
-code += 'asm ("imports: .short ' + ", ".join(imports) + '; imports_end:");\n'
+
+code += 'asm ("'
+code += "base_sym: "
+code += ".pushsection .rodata.tables; "
+code += "handlers: .short " + ", ".join(handlers) + "; "
+code += "opcode_map: .byte " + ", ".join(table) + "; "
+code += "imports: .short " + ", ".join(imports) + "; imports_end: "
+code += ".popsection"
+code += '");\n'
 
 with open("table.i", "w") as f:
     f.write(code)
