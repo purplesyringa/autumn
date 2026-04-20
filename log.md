@@ -1516,3 +1516,9 @@ Time to optimize environment logic, I guess. Down to 4488 bytes.
 ---
 
 Let's try some more generic optimizations. What if we make the executable position-dependent? That brings it down to 4386 bytes.
+
+---
+
+Oops, forgot to make `strlen` static. Still 4386 bytes though.
+
+Found an optimization in `int_compare` and a tiny one in `float_const`. 4354 bytes.

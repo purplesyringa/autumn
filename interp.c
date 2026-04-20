@@ -40,7 +40,8 @@ static void *memset(void *s, int c, size_t n) {
 }
 
 #define SCASB(ptr, count, value) asm ("repne scasb" : "+D"(ptr), "+c"(count) : "a"((unsigned char)value) : "flags");
-size_t strlen(const char *s) {
+
+static size_t strlen(const char *s) {
     unsigned long count = -1;
     SCASB(s, count, 0);
     return -2 - count;
@@ -352,16 +353,14 @@ DEF(int_const, 0x41 /* i32.const */, 0x42 /* i64.const */) {
     *--stack_head = opcode & 1 ? (unsigned)c : c;
 }
 
-DEF(float_const, 0x43 /* f32.const */, 0x44 /* f64.const */) {
+DEF(float_const, 0x43 = 4 /* f32.const */, 0x44 = 8 /* f64.const */) {
     unsigned long value;
     __builtin_memcpy(&value, p, 8);
+    p += arg;
+    PARSED;
     if (opcode == 0x43) { // f32.const
         value &= -1U;
-        p += 4;
-    } else {
-        p += 8;
     }
-    PARSED;
     *--stack_head = value;
 }
 
@@ -443,22 +442,18 @@ DEF(
     PARSED;
     unsigned long b = *stack_head++;
     unsigned long a = *stack_head;
-    if (opcode < 0x51 && opcode % 2 == 0) { // i32.eq or i32.*_s
-        // sign-extend
-        a = (long)(int)a;
-        b = (long)(int)b;
-    }
-    _Bool cond;
+    _Bool out;
     asm (
-        "cmp %2, %1;"
-        "mov %3, 1f + 1(%%rip);"
-        "1:"
-        "setb %0"
-        : "=R"(cond)
-        : "r"(a), "r"(b), "r"(arg)
+        "cmp $0x51, %[opcode];"
+        "jb 1f + 1;" // i32
+        "1: cmp %[b], %[a];"
+        "mov %[cond_byte], 2f + 1(%%rip);"
+        "2: setb %[out]"
+        : [out]"=R"(out)
+        : [a]"R"(a), [b]"R"(b), [cond_byte]"r"(arg), [opcode]"r"(opcode)
         : "flags"
     );
-    *stack_head = cond;
+    *stack_head = out;
 }
 
 DEF(
