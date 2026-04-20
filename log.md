@@ -1508,3 +1508,7 @@ oh no
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 Illegal instruction        (core dumped) ./interp hello-world/target/wasm32-wasip1/release/hello-world.wasm
 ```
+
+---
+
+Time to optimize environment logic, I guess. Down to 4488 bytes.

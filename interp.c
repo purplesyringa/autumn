@@ -117,7 +117,7 @@ struct caller_info {
         };
         unsigned long *saved_locals;
     };
-    unsigned funcidx;
+    // unsigned funcidx;
 };
 struct caller_info caller_stack[1024];
 struct caller_info *caller_stack_head = caller_stack;
@@ -159,7 +159,7 @@ DEF(block_like, 0x02 /* block */, 0x03 /* loop */, 0x04 /* if */) {
         .saved_stack_head = stack_head,
         .has_result = blocktype != 0x40,
         .skipped_if = skipped_if,
-        .funcidx = -1,
+        // .funcidx = -1,
     };
     break_level += break_level > 0 || skipped_if;
 }
@@ -819,7 +819,7 @@ static void call_func(unsigned funcidx) {
         .opcode = 0x10 /* call */,
         .saved_p = saved_p,
         .saved_locals = saved_locals,
-        .funcidx = funcidx,
+        // .funcidx = funcidx,
     };
 }
 
@@ -877,32 +877,33 @@ static void random_get() {
 }
 
 static char **environ;
-
-static void environ_sizes_get() {
-    unsigned environ_buf_size = *stack_head++;
-    unsigned environ_count = *stack_head;
-    unsigned c_environ_buf_size = 0;
-    unsigned c_environ_count = 0;
+static void environ_impl(_Bool is_sizes) {
+    unsigned arg2 = *stack_head++;
+    unsigned arg1 = *stack_head;
+    unsigned ptrs = 0;
+    unsigned pos = is_sizes ? 0 : arg2;
     for (char **p = environ; *p; p++) {
-        c_environ_buf_size += strlen(*p) + 1;
-        c_environ_count += 1;
+        if (!is_sizes) {
+            __builtin_memcpy(memory + arg1 + ptrs * 4, &pos, 4);
+        }
+        ptrs++;
+        unsigned len = strlen(*p);
+        if (!is_sizes) {
+            memcpy(memory + pos, *p, len + 1);
+        }
+        pos += len + 1;
     }
-    __builtin_memcpy(memory + environ_buf_size, &c_environ_buf_size, 4);
-    __builtin_memcpy(memory + environ_count, &c_environ_count, 4);
+    if (is_sizes) {
+        __builtin_memcpy(memory + arg2, &pos, 4);
+        __builtin_memcpy(memory + arg1, &ptrs, 4);
+    }
     *stack_head = 0;
 }
-
+static void environ_sizes_get() {
+    environ_impl(1);
+}
 static void environ_get() {
-    unsigned environ_buf = *stack_head++;
-    unsigned environ_ptrs = *stack_head;
-    for (char **p = environ; *p; p++) {
-        __builtin_memcpy(memory + environ_ptrs, &environ_buf, 4);
-        environ_ptrs += 4;
-        unsigned len = strlen(*p);
-        memcpy(memory + environ_buf, *p, len + 1);
-        environ_buf += len + 1;
-    }
-    *stack_head = 0;
+    environ_impl(0);
 }
 
 int main(int argc, char **argv, char **envp) {
