@@ -1512,3 +1512,7 @@ Illegal instruction        (core dumped) ./interp hello-world/target/wasm32-wasi
 ---
 
 Time to optimize environment logic, I guess. Down to 4488 bytes.
+
+---
+
+Let's try some more generic optimizations. What if we make the executable position-dependent? That brings it down to 4386 bytes.
