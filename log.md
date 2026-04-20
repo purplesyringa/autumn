@@ -1390,3 +1390,24 @@ A division test in `int_exprs.wast` still fails. As far as I can tell, here's th
 `0xf3` is `rep`, and that makes sense, since `lzcnt` is just `rep bsf` after all. It is a problem though, because `rep` is a legacy prefix, and legacy prefixes always need to be put before REX. As far as I can tell, this applies to `tzcnt` and `popcnt` as well. For `popcnt` specifically, the size doesn't matter, but `lzcnt` and `tzcnt` will have to be split into 32-bit and 64-bit versions.
 
 23 tests pass now.
+
+---
+
+Failure in `func.wast`. Looks like locals are supposed to be zero-initialized, and I don't do that? Yup.
+
+Another tuple-related failure, but this time much simpler:
+
+```
+(func $adhoc52 (result i32 f64)
+ (block $block (type $9) (result i32 f64)
+  (br $block
+   (tuple.make 2
+    (i32.const 79)
+    (f64.const 79.79)
+   )
+  )
+ )
+)
+```
+
+This is supposed to be equivalent to `(i32.const 79) (f64.const 79.79)`. Apparently it's not. Okay, no, yeah, I see why this would happen -- I assume blocks can have at most one return value, but this one has two. That's a Wasm 2.0 thing, I'll skip it for now.

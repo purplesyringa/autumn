@@ -13,6 +13,12 @@ static void copy_forward(void *dst, const void *src, size_t n) {
     asm volatile ("rep movsb" : "+D"(dst), "+S"(src), "+c"(n) : : "memory");
 }
 
+static void copy_backward(void *dst, const void *src, size_t n) {
+    dst = (char *)dst + n - 1;
+    src = (char *)src + n - 1;
+    asm volatile ("std; rep movsb; cld" : "+D"(dst), "+S"(src), "+c"(n) : : "memory");
+}
+
 static void *memcpy(void *dst, const void *src, size_t n) {
     copy_forward(dst, src, n);
     return dst;
@@ -22,11 +28,15 @@ static void *memmove(void *dst, const void *src, size_t n) {
     if ((uintptr_t)src < (uintptr_t)dst) {
         copy_forward(dst, src, n);
     } else {
-        dst = (char *)dst + n - 1;
-        src = (char *)src + n - 1;
-        asm volatile ("std; rep movsb; cld" : "+D"(dst), "+S"(src), "+c"(n) : : "memory");
+        copy_backward(dst, src, n);
     }
     return dst;
+}
+
+static void *memset(void *s, int c, size_t n) {
+    void *orig_s = s;
+    asm volatile ("rep stosb" : "+D"(s), "+c"(n) : "a"(c) : "memory");
+    return orig_s;
 }
 
 static long syscall2(long sysno, long a, long b) {
@@ -783,6 +793,7 @@ static void call_func(unsigned funcidx) {
     for (unsigned i = 0; i < n_args; i++) {
         locals[i] = stack_head[n_args - 1 - i];
     }
+    memset(locals + n_args, 0, n_locals * 8);
     stack_head += n_args;
     p = body_p;
 
