@@ -1332,3 +1332,9 @@ I'm going to skip all validation tests and sanity checks, at least for now. That
 I'll also skip `assert_trap`, since there's no built-in `catch` instruction, and the traps are usually used to detect OOB accesses, which, again, I don't implement yet. This leaves just `invoke` and `assert_return`.
 
 Took me a while, but I extracted 49 tests into pure Wasm binaries (out of 105 related tests in total). All but four pass under `wasmtime`, whereas three fail due to unimplemented `spectest`, and another one fails due to lousy handling of `externref` in my test generator. Anyway, *zero* of them pass under `interp-small`. Jesus Christ.
+
+---
+
+Lol, nevermind, I know what it is. My test harness requires `if`..`else`, which I haven't implemented yet, so most of the `ud2`s likely some from there. Let me quickly fix that.
+
+With that, 16 tests pass. There's plenty of `ud2`s and SIGSEGVs still, but it's not 100% and I'm happy about that.
