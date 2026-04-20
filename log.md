@@ -1534,3 +1534,7 @@ There are many leading and trailing zeros in the args list, even though those ar
 Perhaps it's useful to look at the parsing code in `main`, since it's the largest function. The import logic has grown in size after I added more syscall handlers, and perhaps it makes sense to make it data-driven.
 
 I can't prevent the size from increasing... that's as bit horrifying. Here's another idea: maybe encoding the symbols as string is what takes space, and we could use short hashes instead. That finally works: a `crc32` hash of the first 8 bytes of the symbol name, mixed with the name's length, seems to be a good enough hash. The uncompressed size is now 4312 bytes, and the approximate compressed size is 2460 bytes.
+
+---
+
+Applied to opcode handlers the same trick that I used with syscall handlers: store a 16-bit offset from `_start` instead of the true value. The compressor seems to like this, 4129/2428.

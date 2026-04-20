@@ -128,7 +128,7 @@ static void call_func(unsigned funcidx);
 
 #define PARSED if (break_level) return
 #define DEF(name, ...) \
-    static void op_##name( \
+    void op_##name( \
         __attribute__((unused)) unsigned char opcode, \
         __attribute__((unused)) unsigned char arg \
     )
@@ -764,10 +764,12 @@ DEF(fc_prefix, 0xfc) {
 
 #include "table.i"
 
+extern char _start;
+
 static void eval_instr() {
     unsigned char opcode = *p++;
     unsigned short value = opcode_map[opcode];
-    void (*handler)(unsigned char, unsigned char) = handlers[value & 0xff];
+    void (*handler)(unsigned char, unsigned char) = (void *)(&_start + handlers[value & 0xff]);
     handler(opcode, value >> 8);
 }
 
@@ -951,8 +953,7 @@ int main(int argc, char **argv, char **envp) {
                 void (*func)() = NULL;
                 for (unsigned short *ip = imports; ip != imports_end; ip += 2) {
                     if (*ip == (unsigned short)crc32) {
-                        extern char _start;
-                        func = (void *)((char *)&_start + ip[1]);
+                        func = (void *)(&_start + ip[1]);
                         break;
                     }
                 }

@@ -15,7 +15,7 @@ for match in re.findall(r"DEF\(([\s\S]*?)\)", s):
     name, *opcodes = [entry.strip() for entry in match.split(",")]
     if name == "name":
         continue
-    handlers.append(f"op_{name}")
+    handlers.append(f"op_{name} - _start")
     for opcode in opcodes:
         if opcode:
             opcode, _, arg = opcode.partition(" = ")
@@ -50,12 +50,16 @@ for name in re.findall(r"DEF_IMPORT\(([\s\S]*?)\)", s):
     imports.append(f"{name} - _start")
 
 code = ""
-code += "void *handlers[] = {" + ", ".join(handlers) + "};\n"
+
+code += "extern unsigned short handlers[];\n"
+code += 'asm ("handlers: .short ' + ", ".join(handlers) + '");\n'
+
 code += "extern unsigned short opcode_map[];\n"
 code += 'asm ("opcode_map: .byte ' + ", ".join(table) + '");\n'
-code += 'asm ("imports: .short ' + ", ".join(imports) + '; imports_end:");\n'
+
 code += "extern unsigned short imports[];\n"
 code += "extern unsigned short imports_end[];\n"
+code += 'asm ("imports: .short ' + ", ".join(imports) + '; imports_end:");\n'
 
 with open("table.i", "w") as f:
     f.write(code)
