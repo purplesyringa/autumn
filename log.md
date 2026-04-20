@@ -1349,4 +1349,14 @@ Unwinding the operand stack is easy, we can just save the value of `stack` at en
 
 ---
 
-Fixed, 18 tests now pass.
+Fixed, 18 tests now pass. Trying to figure out `fac.wast` now. It fails in the `fac-ssa` function, which apparently relies on `loop`s having arguments, which my interpreter doesn't support. It looks like `wasm-merge` recognizes that I haven't enabled the related feature and rewrites it to tuples, whatever that is -- `wasm-dis` shows instructions like `tuple.extract`, which don't seem to be real Wasm instructions, not even in Wasm 3.0.
+
+https://github.com/WebAssembly/binaryen/issues/6016#issuecomment-1766500515 Sounds like those are pseudo-instructions. Okay.
+
+This code is *way* too complex to debug for now. Let's try something else.
+
+`nop.wast` fails because `memory.grow` returns `-1`. Not something we can change at the moment. Same with `loop.wast`.
+
+Yay, finally a benevolent bug. `local_get.wast` fails due to unaligned accesses in floating-point instructions -- I forgot to consider alignment when switching from `addsd` to `addpd` and alike. Nothing AVX can't fix, most likely.
+
+Well, not so far -- I used the SSE versions to easily strip the `66` prefix, but AVX uses a different encoding. I'll have to sacrifice a few optimizations in the few places where I inlined memory access into the ops, then. It's just a few bytes. 20 tests now pass.

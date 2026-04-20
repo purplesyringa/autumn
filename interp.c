@@ -565,13 +565,11 @@ DEF(
 
 DEF(sqrt, 0x91 = 0 /* f32.sqrt */, 0x9f = 1 /* f64.sqrt */) {
     PARSED;
-    double a;
     asm (
-        "test %2, %2;"
+        "test %1, %1;"
         "je 1f + 1;"
-        "1: sqrtpd %1, %0;"
-        "movq %0, %1;"
-        : "=&x"(a), "+m"(*stack_head)
+        "1: sqrtpd %0, %0"
+        : "+x"(*stack_head)
         : "r"(arg)
         : "flags"
     );
@@ -598,7 +596,7 @@ DEF(
         "1:"
         "addpd %1, %0;"
         : "+x"(*a)
-        : "m"(*b), "r"(opcode), "r"(arg)
+        : "x"(*b), "r"(opcode), "r"(arg)
         : "flags"
     );
 }
