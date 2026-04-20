@@ -8,9 +8,8 @@ interp-debug: interp.c table.i make-rwx
 	$(CC) $< -o $@ $(OPTS) -Wall -Wextra -g -fsanitize=address -nostartfiles
 	./make-rwx $@
 
-interp-small: interp.c table.i
+interp-small.bin: interp.c table.i
 	$(CC) $< -o $@ $(OPTS) -Wall -Wextra -fno-stack-protector -nostdlib -static -fno-pie -fno-asynchronous-unwind-tables -T small.ld
-	strip --strip-section-headers $@
 
 table.i: interp.c make-table.py
 	python3 make-table.py

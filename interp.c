@@ -47,6 +47,14 @@ static size_t strlen(const char *s) {
     return -2 - count;
 }
 
+static long syscall0(long sysno) {
+    asm volatile ("syscall" : "+a"(sysno) :: "rcx", "r11", "memory");
+    return sysno;
+}
+static long syscall1(long sysno, long a) {
+    asm volatile ("syscall" : "+a"(sysno) : "D"(a) : "rcx", "r11", "memory");
+    return sysno;
+}
 static long syscall2(long sysno, long a, long b) {
     asm volatile ("syscall" : "+a"(sysno) : "D"(a), "S"(b) : "rcx", "r11", "memory");
     return sysno;
@@ -764,12 +772,12 @@ DEF(fc_prefix, 0xfc) {
 
 #include "table.i"
 
-extern char _start;
+extern char base_sym;
 
 static void eval_instr() {
     unsigned char opcode = *p++;
     unsigned short value = opcode_map[opcode];
-    void (*handler)(unsigned char, unsigned char) = (void *)(&_start + handlers[value & 0xff]);
+    void (*handler)(unsigned char, unsigned char) = (void *)(&base_sym + handlers[value & 0xff]);
     handler(opcode, value >> 8);
 }
 
@@ -875,13 +883,13 @@ DEF_IMPORT(random_get) {
     *stack_head = 0;
 }
 
-static char **environ;
-static void environ_impl(_Bool is_sizes) {
+static char **environ, **args;
+static void syslist_impl(char **p, _Bool is_sizes) {
     unsigned arg2 = *stack_head++;
     unsigned arg1 = *stack_head;
     unsigned ptrs = 0;
     unsigned pos = is_sizes ? 0 : arg2;
-    for (char **p = environ; *p; p++) {
+    for (; *p; p++) {
         if (!is_sizes) {
             __builtin_memcpy(memory + arg1 + ptrs * 4, &pos, 4);
         }
@@ -898,15 +906,22 @@ static void environ_impl(_Bool is_sizes) {
     }
     *stack_head = 0;
 }
-DEF_IMPORT(environ_sizes_get) {
-    environ_impl(1);
+DEF_IMPORT(environ_get) { syslist_impl(environ, 0); }
+DEF_IMPORT(environ_sizes_get) { syslist_impl(environ, 1); }
+DEF_IMPORT(args_get) { syslist_impl(args, 0); }
+DEF_IMPORT(args_sizes_get) { syslist_impl(args, 1); }
+
+DEF_IMPORT(proc_exit) {
+    syscall1(SYS_exit, *stack_head);
+    __builtin_trap();
 }
-DEF_IMPORT(environ_get) {
-    environ_impl(0);
+DEF_IMPORT(proc_raise) {
+    *stack_head = -syscall2(SYS_kill, syscall0(SYS_getpid), *stack_head);
 }
 
 int main(int argc, char **argv, char **envp) {
     (void)argc;
+    args = argv + 1;
     environ = envp;
 
     int fd = syscall2(SYS_open, (long)argv[1], O_RDONLY);
@@ -953,7 +968,7 @@ int main(int argc, char **argv, char **envp) {
                 void (*func)() = NULL;
                 for (unsigned short *ip = imports; ip != imports_end; ip += 2) {
                     if (*ip == (unsigned short)crc32) {
-                        func = (void *)(&_start + ip[1]);
+                        func = (void *)(&base_sym + ip[1]);
                         break;
                     }
                 }
@@ -1080,6 +1095,7 @@ int main(int argc, char **argv, char **envp) {
 }
 
 asm (
+    ".pushsection .text.start;"
     ".globl _start;"
     "_start:"
     "pop %rdi;" // argc
@@ -1088,5 +1104,6 @@ asm (
     "call main;"
     "mov $60, %eax;" // exit
     "xor %edi, %edi;"
-    "syscall"
+    "syscall;"
+    ".popsection"
 );

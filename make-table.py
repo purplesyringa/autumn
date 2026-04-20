@@ -15,7 +15,7 @@ for match in re.findall(r"DEF\(([\s\S]*?)\)", s):
     name, *opcodes = [entry.strip() for entry in match.split(",")]
     if name == "name":
         continue
-    handlers.append(f"op_{name} - _start")
+    handlers.append(f"op_{name} - base_sym")
     for opcode in opcodes:
         if opcode:
             opcode, _, arg = opcode.partition(" = ")
@@ -47,12 +47,12 @@ for name in re.findall(r"DEF_IMPORT\(([\s\S]*?)\)", s):
     assert name_crc not in crcs, f"name collision for {name}"
     crcs.add(name_crc)
     imports.append(str(name_crc))
-    imports.append(f"{name} - _start")
+    imports.append(f"{name} - base_sym")
 
 code = ""
 
 code += "extern unsigned short handlers[];\n"
-code += 'asm ("handlers: .short ' + ", ".join(handlers) + '");\n'
+code += 'asm ("base_sym: handlers: .short ' + ", ".join(handlers) + '");\n'
 
 code += "extern unsigned short opcode_map[];\n"
 code += 'asm ("opcode_map: .byte ' + ", ".join(table) + '");\n'

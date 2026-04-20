@@ -1538,3 +1538,18 @@ I can't prevent the size from increasing... that's as bit horrifying. Here's ano
 ---
 
 Applied to opcode handlers the same trick that I used with syscall handlers: store a 16-bit offset from `_start` instead of the true value. The compressor seems to like this, 4129/2428.
+
+---
+
+I wanted to see how much the code weighs without ELF headers. It's 3841 bytes uncompressed, 2371 bytes compressed. So the ELF header didn't affect compression too much. This leaves 582 bytes for the decompressor and improvements to the interpreter.
+
+I'd rather work on the decompressor together with Yuki. For now, perhaps improving WASI integration is a reasonable direction to focus on?
+
+Okay, so it turns out WASIp1 is enormous. Just to test how bad this is, I can add the simplest and most common necessary syscalls:
+
+- `args_get`
+- `args_sizes_get`
+- `proc_exit`
+- `proc_raise` (arguably)
+
+That's 3948/2444, about +70 bytes compressed.
