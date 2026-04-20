@@ -682,7 +682,9 @@ DEF(
 
     if (opcode & 1) { // inn.trunc_f64_u
         if ((long)out < 0) {
-            out = (out << 11) | (1UL << 63);
+            unsigned long value;
+            __builtin_memcpy(&value, &x, 8);
+            out = (value << 11) | (1UL << 63);
         }
     } else {
         if (arg & 2) { // i32

@@ -1456,3 +1456,13 @@ Well, okay, not quite -- `f64_cmp.wast` still fails. In function `0x666`, no les
 Weird. Okay, nevermind, not that weird: I use `cmppd` instead of `vcmppd`, which means part of the `imm8` is ignored and I end up performing some garbage comparison -- more specifically, "greater or unordered" instead of "greater".
 
 Replaced it with patched `vcmppd`, but it got even worse. So `vcmpp[ds]` is weird: it uses the same byte to represent `d`/`s` and one of the arguments (the first source, to be more specific). This effectively means we're forced to hard-code that register. 28 tests now pass.
+
+---
+
+Next up: `conversions.wast`. This one tests floating-point <-> integer conversions. It won't pass entirely, since it tests unimplemented `*_sat_*` conversions, but the current failure is earlier than that:
+
+```
+(assert_return (invoke "i64.trunc_f32_u" (f32.const 18446742974197923840.0)) (i64.const -1099511627776))
+```
+
+Found it: I used the output instead of the input in one of the expressions. It now gets stuck on `*_sat_*`.
