@@ -386,7 +386,7 @@ DEF(
     PARSED;
     extern unsigned char unop_handlers;
     unsigned long xmm = *stack_head;
-    asm volatile (
+    asm (
         "call *%[handler];"
         ".pushsection .text.op;"
         "unop_handlers:"
@@ -404,7 +404,7 @@ DEF(
         "unop_sxt8: movsx %b0, %0; ret;"
         "unop_sxt16: movsx %w0, %0; ret;"
         ".popsection"
-        : "+r"(*stack_head), "+x"(xmm)
+        : "+R"(*stack_head), "+x"(xmm)
         : [handler]"r"(&unop_handlers + arg)
         : "flags"
     );
@@ -447,7 +447,7 @@ DEF(
         "mov %3, 1f + 1(%%rip);"
         "1:"
         "setb %0"
-        : "=r"(cond)
+        : "=R"(cond)
         : "r"(a), "r"(b), "r"(arg)
         : "flags"
     );
@@ -479,7 +479,7 @@ DEF(
         "1:"
         "cmppd $0, %[b], %[a]"
         : "=x"(out)
-        : [a]"0"(*stack_head), [b]"m"(*b), [opcode]"r"(opcode), [imm8]"r"(arg)
+        : [a]"0"(*stack_head), [b]"x"(*b), [opcode]"r"(opcode), [imm8]"r"(arg)
         : "flags"
     );
     *stack_head = out & 1;
@@ -523,7 +523,7 @@ DEF(
     unsigned long b = *stack_head++;
     unsigned long a = *stack_head;
     unsigned long zero = 0;
-    asm volatile (
+    asm (
         "call *%[handler];"
         ".pushsection .text.op;"
         "binop_handlers:"
@@ -565,15 +565,14 @@ DEF(
 ) {
     PARSED;
     unsigned char size_byte = 0x0a + (opcode >= 0x9b); // f64
-    double a;
     asm (
-        "mov %[size_byte], 1f + 5(%%rip);"
-        "mov %[mode], 1f + 7(%%rip);"
+        "mov %[size_byte], 1f + 3(%%rip);"
+        "mov %[mode], 1f + 5(%%rip);"
         "1:"
-        "roundsd $0, %1, %0;"
-        "movq %0, %1;"
-        : "=&x"(a), "+m"(*stack_head)
+        "roundsd $0, %0, %0"
+        : "+x"(*stack_head)
         : [size_byte]"r"(size_byte), [mode]"r"(arg)
+        : "memory"
     );
 }
 

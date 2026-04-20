@@ -1411,3 +1411,24 @@ Another tuple-related failure, but this time much simpler:
 ```
 
 This is supposed to be equivalent to `(i32.const 79) (f64.const 79.79)`. Apparently it's not. Okay, no, yeah, I see why this would happen -- I assume blocks can have at most one return value, but this one has two. That's a Wasm 2.0 thing, I'll skip it for now.
+
+---
+
+Failure in `float_misc.wast` -- segfault, even. This one should be more interesting.
+
+I think I know why this happens. When patching instructions, I found the locations to patch by simply looking at the generated code. But the indices can change depending on the chosen registers due to the REX prefix.
+
+It seems like I very rarely guarantee that registers are representable without REX. I should change that -- GCC supports this via the `R` constraint. It doesn't support anything like "memory operand that doesn't require REX to encode", though, which is what actually triggered this issue:
+
+```
+0:  66 0f c2 01 00          cmpeqpd xmm0,XMMWORD PTR [rcx]
+5:  66 41 0f c2 03 00       cmpeqpd xmm0,XMMWORD PTR [r11]
+b:  66 0f 3a 0b 01 00       roundsd xmm0,QWORD PTR [rcx],0x0
+11: 66 41 0f 3a 0b 03 00    roundsd xmm0,QWORD PTR [r11],0x0
+```
+
+However, I can workaround this by simply indexing bytes from the end as opposed to the start.
+
+...or maybe not. GCC infers addressing via register `r13`, which doesn't support disp-less addressing, so there's a stray `disp8` that breaks indexing.
+
+24 tests pass.
