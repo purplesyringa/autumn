@@ -1373,3 +1373,7 @@ It's non-trivial to fix because division is implemented as part of the generic b
 ...but this requires adding instructions in the 32-bit case instead of just truncating a byte. I need something that parses cleverly... wait, no, I'm stupid. I no longer force the 1-byte truncation, I have `arg` as an arbitrary offset. I can just create another entry for this.
 
 Fixed, 21 tests pass now.
+
+---
+
+A division test in `int_exprs.wast` still fails. As far as I can tell, here's the issue: while dividing `i32::MIN` by `-1` traps, taking the remainder should just return `0`. x86 doesn't merges division and remainder into one operation, so it traps as well. Yup, seems like the Wasm docs confirm this difference. How do I even begin to handle this? I think I need to manually compare the divisor with `-1` and manually return `0` in this case. Or, better yet, skip division and reuse the zero pre-stored in `rdx` as the return value.
