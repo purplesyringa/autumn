@@ -1495,3 +1495,16 @@ $_RINvMs_NtNtNtCsTnEDepTwQh_3std3sys12thread_local10no_threadsINtB5_11LazyStorag
 This is weird because the `unreachable` is located after a panic, but that panic is not rendered. Why?
 
 Oh. Nevermind, I had a bug in `memory.fill`. 4232 bytes, and the guessing game now works.
+
+---
+
+But still, what's up with panics? I don't want unwinding, but I at least want logging. And from a quick test, `panic!` straight up segfaults. Probably just due to a call to an unimplemented function, but still.
+
+Yup, it tries to access the environment. I can implement that. 4520 bytes is ridiculous, but I just want to get this working first. And panics already work:
+
+```
+thread 'main' (1) panicked at src/main.rs:7:5:
+oh no
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+Illegal instruction        (core dumped) ./interp hello-world/target/wasm32-wasip1/release/hello-world.wasm
+```

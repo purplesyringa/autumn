@@ -39,6 +39,13 @@ static void *memset(void *s, int c, size_t n) {
     return orig_s;
 }
 
+#define SCASB(ptr, count, value) asm ("repne scasb" : "+D"(ptr), "+c"(count) : "a"((unsigned char)value) : "flags");
+size_t strlen(const char *s) {
+    unsigned long count = -1;
+    SCASB(s, count, 0);
+    return -2 - count;
+}
+
 static long syscall2(long sysno, long a, long b) {
     asm volatile ("syscall" : "+a"(sysno) : "D"(a), "S"(b) : "rcx", "r11", "memory");
     return sysno;
@@ -47,8 +54,6 @@ static long syscall3(long sysno, long a, long b, long c) {
     asm volatile ("syscall" : "+a"(sysno) : "D"(a), "S"(b), "d"(c) : "rcx", "r11", "memory");
     return sysno;
 }
-
-#define SCASB(ptr, count, value) asm ("repne scasb" : "+D"(ptr), "+c"(count) : "a"((unsigned char)value) : "flags");
 
 struct read_int_output {
     unsigned long value;
@@ -871,8 +876,38 @@ static void random_get() {
     *stack_head = 0;
 }
 
-int main(int argc, char **argv) {
+static char **environ;
+
+static void environ_sizes_get() {
+    unsigned environ_buf_size = *stack_head++;
+    unsigned environ_count = *stack_head;
+    unsigned c_environ_buf_size = 0;
+    unsigned c_environ_count = 0;
+    for (char **p = environ; *p; p++) {
+        c_environ_buf_size += strlen(*p) + 1;
+        c_environ_count += 1;
+    }
+    __builtin_memcpy(memory + environ_buf_size, &c_environ_buf_size, 4);
+    __builtin_memcpy(memory + environ_count, &c_environ_count, 4);
+    *stack_head = 0;
+}
+
+static void environ_get() {
+    unsigned environ_buf = *stack_head++;
+    unsigned environ_ptrs = *stack_head;
+    for (char **p = environ; *p; p++) {
+        __builtin_memcpy(memory + environ_ptrs, &environ_buf, 4);
+        environ_ptrs += 4;
+        unsigned len = strlen(*p);
+        memcpy(memory + environ_buf, *p, len + 1);
+        environ_buf += len + 1;
+    }
+    *stack_head = 0;
+}
+
+int main(int argc, char **argv, char **envp) {
     (void)argc;
+    environ = envp;
 
     int fd = syscall2(SYS_open, (long)argv[1], O_RDONLY);
     int len = syscall3(SYS_read, fd, (long)module_bytes, sizeof(module_bytes));
@@ -917,6 +952,10 @@ int main(int argc, char **argv) {
                     func = fd_write;
                 } else if (name_len == 10 && name == 0x675f6d6f646e6172 /* random_g */) {
                     func = random_get;
+                } else if (name_len == 17 && name == 0x5f6e6f7269766e65 /* environ_ */) {
+                    func = environ_sizes_get;
+                } else if (name_len == 11 && name == 0x5f6e6f7269766e65 /* environ_ */) {
+                    func = environ_get;
                 }
                 funcs[n_funcs++] = (struct func_info){
                     .func = (unsigned char*)func,
@@ -1044,7 +1083,7 @@ asm (
     "_start:"
     "pop %rdi;" // argc
     "mov %rsp, %rsi;" // argv
-    // we don't need envp
+    "lea 8(%rsi,%rdi,8), %rdx;" // envp
     "call main;"
     "mov $60, %eax;" // exit
     "xor %edi, %edi;"
