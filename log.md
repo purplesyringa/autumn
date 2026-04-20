@@ -1346,3 +1346,7 @@ Re-reading the spec, who the fuck thought this was a good design??
 > Taking a branch unwinds the operand stack up to the height where the targeted structured control instruction was entered. However, forward branches that target a control instruction with a non-empty result type consume matching operands first and push them back on the operand stack after unwinding, as a result for the terminated structured instruction.
 
 Unwinding the operand stack is easy, we can just save the value of `stack` at entry time. We need to do that anyway, because I'm now realizing that we need to do something similar with functions. The difficult part is handling forward branches. As far as I can tell, whenever we encounter an `end` instruction such that `break_level` falls from `1` to `0`, and the popped entry is `block` or `if`, and the corresponding block has a result type, we need to copy the stack values. Messy.
+
+---
+
+Fixed, 18 tests now pass.

@@ -94,8 +94,12 @@ unsigned long *locals = locals_stack + sizeof(locals_stack) / sizeof(locals_stac
 struct caller_info {
     unsigned char opcode;
     unsigned char *saved_p;
+    unsigned long *saved_stack_head;
     union {
-        _Bool skipped_if;
+        struct {
+            _Bool has_result;
+            _Bool skipped_if;
+        };
         unsigned long *saved_locals;
     };
 };
@@ -131,11 +135,13 @@ DEF(
 ) {}
 
 DEF(block_like, 0x02 /* block */, 0x03 /* loop */, 0x04 /* if */) {
-    p++; // blocktype
+    unsigned char blocktype = *p++;
     _Bool skipped_if = break_level == 0 && opcode == 0x04 && !*stack_head++;
     *caller_stack_head++ = (struct caller_info) {
         .opcode = opcode,
         .saved_p = p - 2,
+        .saved_stack_head = stack_head,
+        .has_result = blocktype != 0x40,
         .skipped_if = skipped_if,
     };
     break_level += break_level > 0 || skipped_if;
@@ -155,8 +161,18 @@ DEF(end, 0x0b) {
     } else {
         if (break_level > 0) {
             break_level--;
-            if (caller->opcode == 0x03 /* loop */ && break_level == 0) {
-                p = caller->saved_p;
+            if (break_level == 0) {
+                if (caller->opcode == 0x03) { // loop
+                    p = caller->saved_p;
+                } else { // block or if
+                    if (caller->has_result) {
+                        unsigned long value = *stack_head++;
+                        stack_head = caller->saved_stack_head;
+                        *--stack_head = value;
+                    } else {
+                        stack_head = caller->saved_stack_head;
+                    }
+                }
             }
         }
     }
