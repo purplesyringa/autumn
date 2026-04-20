@@ -1466,3 +1466,32 @@ Next up: `conversions.wast`. This one tests floating-point <-> integer conversio
 ```
 
 Found it: I used the output instead of the input in one of the expressions. It now gets stuck on `*_sat_*`.
+
+---
+
+`call.wast` looks interesting. It doesn't contain `exnref`s or anything like that, but still fails. Oh, nevermind, it's `memory.grow` again. Actually, I think I've fixed pretty much all tests that don't rely on deliberately implemented features.
+
+During the fixes, the code grew from 3840 bytes to 4008 bytes. I can't tell where exactly this increase came from -- it's probably just minor stuff here and there. All the fixes so far have been pretty much unavoidable, but I need to think twice before introducing further changes just for compatibility with the test suite -- every byte I spend on that is a byte I can't spend on implementing WASI syscalls.
+
+Let's focus on that for now. `fd_write` is quite large, but I don't see a way to simplify it. What other syscalls do we need? Just the basics. Let's try the guessing game from Rustbook.
+
+Implemented `fd_read`, 4104 bytes.
+
+Implemented `get_random`, 4168 bytes.
+
+Stuck on implemented `memory.fill` now. Implemented it, but got `unreachable`. The stacktrace:
+
+```
+$_start
+$__main_void
+$_RNvNtCsTnEDepTwQh_3std2rt19lang_start_internal
+$_RNCINvNtCsTnEDepTwQh_3std2rt10lang_startuE0CshN1N6RfDjN1_11hello_world
+$_RINvNtNtCsTnEDepTwQh_3std3sys9backtrace28___rust_begin_short_backtraceFEuuECshN1N6RfDjN1_11hello_world
+$_RNvCshN1N6RfDjN1_11hello_world4main
+$_RNvNtNtCsjNUTKFuqJE_4rand4rngs6thread3rng
+$_RINvMs_NtNtNtCsTnEDepTwQh_3std3sys12thread_local10no_threadsINtB5_11LazyStorageINtNtCsc9qWavMCQxu_5alloc2rc2RcINtNtCshbByS147RDD_4core4cell10UnsafeCellINtNtCsaGBf0nVccdG_9rand_core5block8BlockRngNtNtNtCsjNUTKFuqJE_4rand4rngs6thread13ReseedingCoreEEEE10initializeNvNvB39_14THREAD_RNG_KEY27___rust_std_internal_init_fnEB3d_
+```
+
+This is weird because the `unreachable` is located after a panic, but that panic is not rendered. Why?
+
+Oh. Nevermind, I had a bug in `memory.fill`. 4232 bytes, and the guessing game now works.

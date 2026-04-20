@@ -112,6 +112,7 @@ struct caller_info {
         };
         unsigned long *saved_locals;
     };
+    unsigned funcidx;
 };
 struct caller_info caller_stack[1024];
 struct caller_info *caller_stack_head = caller_stack;
@@ -153,6 +154,7 @@ DEF(block_like, 0x02 /* block */, 0x03 /* loop */, 0x04 /* if */) {
         .saved_stack_head = stack_head,
         .has_result = blocktype != 0x40,
         .skipped_if = skipped_if,
+        .funcidx = -1,
     };
     break_level += break_level > 0 || skipped_if;
 }
@@ -744,6 +746,16 @@ DEF(fc_prefix, 0xfc) {
         memmove(memory + dst, memory + src, n);
         break;
     }
+    case 0x0b: // memory.fill
+    {
+        p++; // memidx
+        PARSED;
+        unsigned n = *stack_head++;
+        unsigned c = *stack_head++;
+        unsigned dst = *stack_head++;
+        memset(memory + dst, c, n);
+        break;
+    }
     default:
         // printf("Unknown opcode 0xfc 0x%02x\n", opcode);
         __builtin_trap();
@@ -802,11 +814,12 @@ static void call_func(unsigned funcidx) {
         .opcode = 0x10 /* call */,
         .saved_p = saved_p,
         .saved_locals = saved_locals,
+        .funcidx = funcidx,
     };
 }
 
-static void fd_write() {
-    unsigned n_written = *stack_head++;
+static void fd_op(int syscallno) {
+    unsigned n_processed = *stack_head++;
     unsigned iovs_len = *stack_head++;
     unsigned iovs = *stack_head++;
     unsigned fd = *stack_head;
@@ -823,17 +836,39 @@ static void fd_write() {
             .iov_len = wasi_iovs[i].buf_len,
         };
     }
-    ssize_t native_out = syscall3(SYS_writev, fd, (long)native_iovs, iovs_len);
+    ssize_t native_out = syscall3(syscallno, fd, (long)native_iovs, iovs_len);
 
     unsigned long wasi_out;
     if (native_out < 0) {
         wasi_out = -native_out;
     } else {
-        __builtin_memcpy(memory + n_written, &native_out, 4);
+        __builtin_memcpy(memory + n_processed, &native_out, 4);
         wasi_out = 0;
     }
 
     *stack_head = wasi_out;
+}
+
+static void fd_read() {
+    fd_op(SYS_readv);
+}
+static void fd_write() {
+    fd_op(SYS_writev);
+}
+
+static void random_get() {
+    unsigned buf_len = *stack_head++;
+    unsigned buf = *stack_head;
+    while (buf_len > 0) {
+        ssize_t native_out = syscall3(SYS_getrandom, (long)(memory + buf), buf_len, 0);
+        if (native_out < 0) {
+            *stack_head = -native_out;
+            return;
+        }
+        buf_len -= native_out;
+        buf += native_out;
+    }
+    *stack_head = 0;
 }
 
 int main(int argc, char **argv) {
@@ -876,8 +911,12 @@ int main(int argc, char **argv) {
                 __builtin_memcpy(&name, p, 8);
 
                 void (*func)() = NULL;
-                if (name_len == 8 && name == 0x65746972775f6466 /* fd_write */) {
+                if (name_len == 7 && (name & 0xffffffffffffff) == 0x646165725f6466 /* fd_read */) {
+                    func = fd_read;
+                } else if (name_len == 8 && name == 0x65746972775f6466 /* fd_write */) {
                     func = fd_write;
+                } else if (name_len == 10 && name == 0x675f6d6f646e6172 /* random_g */) {
+                    func = random_get;
                 }
                 funcs[n_funcs++] = (struct func_info){
                     .func = (unsigned char*)func,
