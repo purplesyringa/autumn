@@ -1776,3 +1776,7 @@ I *knew* `prev_bytes` should've been accessed directly from memory instead of be
 Found a cool trick in Crinkler. Currently, when I switch to the next byte, I manually insert a `1` byte into the output stream. However, I can instead reuse the already-existing `rcl` instruction to effectively copy the just-shifted-out `1` from the previous byte into the current one.
 
 It's a little trickier than that, actually -- looks like `CF = 1` comes not from the previous byte, but from the comparison with `output_stream_end`. But it's close. 2788 bytes.
+
+---
+
+Apparently `lodsb` is not always more efficient than typical instructions, since it takes up a register in a loop. Removing `lodsb` freed up `rsi`, which I could replace a REX register with. 2784 bytes.

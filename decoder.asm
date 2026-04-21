@@ -46,14 +46,13 @@ program_header_end:
     ; r10 -- current input bit index
     ;
     ; While decoding bits:
-    ; r8 -- total c0
+    ; rsi -- total c0
     ; r14 -- total c1
     ;
     ; While querying models:
     ; rax -- 8-bit mask / hash / counters
     ; rcx -- model count
     ; rdx -- 64-bit mask / masked prev_bytes / c0
-    ; rsi -- model list
     ;
     ; Teaching models:
     ; rcx -- model counter
@@ -75,17 +74,14 @@ write_bit:
     jc next_byte
 
     push 1
-    pop r8 ; c0
-    mov r14d, r8d ; c1
+    pop rsi ; c0
+    mov r14d, esi ; c1
 
-    mov esi, models
     mov cl, models_end - models
 
 query_model:
-    xor eax, eax
-
     ; Load 8-bit mask
-    lodsb
+    movzx eax, byte [rcx + models - 1]
 
     ; Extract bytes from `prev_bytes` according to mask
     pdep rdx, rax, [rel ones]
@@ -106,18 +102,18 @@ query_model:
     ; Accumulate c0/c1
     movzx edx, byte [rax + 1]
     movzx eax, byte [rax]
-    add r8d, eax
+    add esi, eax
     add r14d, edx
 
     loop query_model
 
     ; We now know c0 and c1 
-    add r8d, r14d ; c0 += c1
+    add esi, r14d ; c0 += c1
 
     ; mid = range * c1 / (c0 + c1)
     mov eax, ebp
     mul r14d
-    div r8d
+    div esi
 
     cmp ebx, eax
     sbb rdx, rdx ; bit = 0 => rdx = 0, bit = 1 => rdx = -1

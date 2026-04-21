@@ -225,6 +225,7 @@ fn main() {
         }
     }
     let model_list = (0..=127u8)
+        .rev()
         .filter(|i| models[*i as usize])
         .map(|i| ((i << 1) | 1).reverse_bits())
         .collect::<Vec<_>>();
