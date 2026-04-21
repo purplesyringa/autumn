@@ -1116,6 +1116,7 @@ int main(int argc, char **argv, char **envp) {
     if (start_funcidx != (unsigned)-1) {
         call_func(start_funcidx);
     }
+    break_level = 0;
     while (p) {
         eval_instr();
     }

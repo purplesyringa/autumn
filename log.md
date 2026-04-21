@@ -1725,3 +1725,16 @@ We made a decoder. Nothing to write home about, but it works! The compressed cod
 ---
 
 Wrote a small script to see the disassembly of the built program. `objdump -d` can't normally disassemble ELF without section headers, so this was necessary.
+
+---
+
+Optimized the decoder a bit. I'm at 2813 bytes. There's nothing too interesting to talk about, save for a couple tricks:
+
+- To expand an 8-bit mask to a 64-bit mask, I use `pdep rdx, rax, [rel ones]; imul rdx, 0xff`.
+- Instead of using `crc(0, masked_bytes) ^ model` as a hash, I use `crc(model, masked_bytes) ^ masked_bytes`, which has similar quality, but doesn't require a known-zero register to compute.
+- When querying models, I save addresses of the accessed hash entries onto stack. When teaching models, I just pop them from the stack instead of recomputing.
+- I compute `mid = range * c0 / (c0 + c1)` as `mul` + `div`. `mul` widens the input in `eax` to `edx:eax`, `div` compresses it back.
+- To check if `range >= 2^31`, I check its sign bit. I do this right after subtracting `mid` from `range` so that the flag is already set. If the bit is 0 (and thus no subtraction is required), I zero `mid` instead of jumping over the code, so that the flags are still set.
+- I store `c1` before `c0`, so that the value of the bit equals the index of the byte to right-shift.
+
+Also fixed a subtle bug: the interpreter didn't initialize the `register` `break_level` global, so when I used the register `r14` in the decoder, the interpreter broke.

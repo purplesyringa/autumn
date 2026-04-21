@@ -41,8 +41,10 @@ fn model_mask(model: u8) -> u64 {
 
 impl ModelCounter {
     fn get_mut(&mut self, model: u8, prev_bytes: u64, next_byte: u8) -> &mut Counter {
-        let arg = (prev_bytes & model_mask(model)) << 8 | next_byte as u64;
-        let hash = unsafe { core::arch::x86_64::_mm_crc32_u64(0, arg) } ^ ((model << 1) | 1) as u64;
+        let shifted_model = (model << 1) | 1;
+        let mask = model_mask(shifted_model);
+        let arg = ((prev_bytes << 8) | next_byte as u64) & mask;
+        let hash = unsafe { core::arch::x86_64::_mm_crc32_u64(shifted_model as u64, arg) } ^ arg;
         let key = hash as usize % self.map.len();
         &mut self.map[key]
     }
@@ -59,7 +61,7 @@ impl Encoder {
         Self {
             bits: vec![],
             left: 0,
-            range: 1 << 31,
+            range: u32::MAX,
         }
     }
 

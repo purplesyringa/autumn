@@ -37,12 +37,33 @@ program_header:
     dq 0 ; alignment
 program_header_end:
 
+    ; Register allocation:
+    ;
+    ; Shared among all stages:
+    ; rbx (prev_bytes << 8) | next_byte
+    ; rdi -- current output byte
+    ; rbp -- range
+    ; r10 -- current input bit index
+    ; r12 -- value
+    ;
+    ; While decoding bits:
+    ; r8 -- total c0
+    ; r14 -- total c1
+    ;
+    ; While querying models:
+    ; rax -- 8-bit mask / hash / counters
+    ; rcx -- model count
+    ; rdx -- 64-bit mask / masked prev_bytes / c0
+    ; rsi -- model list
+    ;
+    ; Teaching models:
+    ; rcx -- model counter
+    ; rdx -- calculated bit
+
 entry:
-    xor r9d, r9d ; current output byte index
-    xor r10d, r10d ; current input bit index
-    xor ebx, ebx ; (prev_bytes << 8) | next_byte
-    mov r11d, 0x80000000 ; range
-    mov r12d, initial ; value
+    mov edi, output_stream
+    dec ebp
+    mov r12d, initial
 
 decode_byte:
     shl rbx, 8
@@ -50,51 +71,50 @@ decode_byte:
 
 decode_bit:
     push 1
-    pop rdi ; c0
-    mov ebp, edi ; c1
+    pop r8 ; c0
+    mov r14d, r8d ; c1
 
-    lea esi, [rel models]
+    mov esi, models
     mov ecx, models_end - models
 
 query_model:
+    xor eax, eax
+
     ; Load 8-bit mask
     lodsb
 
     ; Extend mask to 64-bit
-    mov r8, 0x0101010101010101
-    pdep r8, rax, r8
-    imul r8, 0xff
+    pdep rdx, rax, [rel ones]
+    imul rdx, 0xff
 
     ; Apply mask to `prev_bytes`
-    and r8, rbx
+    and rdx, rbx
 
     ; Compute hash table entry address
-    xor edx, edx
-    crc32 rdx, r8
-    xor dl, al
-    and edx, 16 * 1024 * 1024 - 1
-    lea edx, [rdx * 2 + hash_table]
+    crc32 rax, rdx
+    xor eax, edx
+    and eax, 16 * 1024 * 1024 - 1
+    lea eax, [rax * 2 + hash_table]
 
     ; Save address for later adjustment
-    push rdx
+    push rax
 
     ; Accumulate c0/c1
-    mov ax, [rdx]
+    mov ax, [rax]
     movzx edx, ah
     movzx eax, al
-    add edi, edx
-    add ebp, eax
+    add r8d, edx
+    add r14d, eax
 
     loop query_model
 
     ; We now know c0 and c1 
-
-    add ebp, edi ; c1 += c0
+    add r14d, r8d ; c1 += c0
 
     ; mid = range * c0 / (c0 + c1)
-    mov eax, r11d
-    mul edi
-    div ebp
+    mov eax, ebp
+    mul r8d
+    div r14d
 
     xor edx, edx
     cmp r12d, eax
@@ -102,25 +122,21 @@ query_model:
     jae bit1
 
     ; bit = 0, x < mid
-    mov r11d, eax
-    jmp check_precision
+    mov ebp, eax
+    xor eax, eax
 
 bit1:
     ; bit = 1, x >= mid
-    sub r11d, eax
     sub r12d, eax
-
-check_precision:
-    test r11d, r11d
+    sub ebp, eax
     js bit_done
 
-    ; Increase precision
-    lea eax, [rel input_stream]
-    bt [rax], r10
+increase_precision:
+    bt [rel input_stream], r10
     rcl r12d, 1
-    shl r11d, 1
     inc r10d
-    jmp check_precision
+    shl ebp, 1
+    jns increase_precision
 
 bit_done:
     ; Teach models
@@ -136,13 +152,16 @@ teach_model:
     jnc decode_bit
 
     ; Byte done
-    mov [r9 + output_stream], bl
-    inc r9d
-    cmp r9w, output_len
+    mov al, bl
+    stosb
+    cmp edi, output_stream_end
     jne decode_byte
 
 ready:
     jmp output_stream
+
+ones:
+    dq 0x0101010101010101
 
 models:
     incbin "models.bin"
@@ -162,3 +181,4 @@ hash_table:
 
 ; output_stream:
     resb output_len
+output_stream_end:
