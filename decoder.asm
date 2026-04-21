@@ -81,18 +81,21 @@ write_bit:
 
 query_model:
     ; Load 8-bit mask
-    movzx eax, byte [rcx + models - 1]
+    mov dl, byte [rcx + models - 1]
 
-    ; Extract bytes from `prev_bytes` according to mask
-    pdep rdx, rax, [rel ones]
-    imul rdx, 0xff
-
-    ; Apply mask to `prev_bytes`
-    and rdx, [rdi - 7]
+    ; Compute hash
+    xor eax, eax
+    crc32 eax, dl
+    sub edi, 8
+hash:
+    inc edi
+    shl dl, 1
+    jnc skip_byte
+    crc32 eax, byte [rdi]
+skip_byte:
+    jne hash
 
     ; Compute hash table entry address
-    crc32 rax, rdx
-    xor eax, edx
     and eax, 32 * 1024 * 1024 - 2
     add eax, hash_table
 
@@ -148,9 +151,6 @@ teach_model:
 
     shr dl, 1
     jmp write_bit
-
-ones:
-    dq 0x0101010101010101
 
 models:
     incbin "models.bin"

@@ -1784,3 +1784,11 @@ Apparently `lodsb` is not always more efficient than typical instructions, since
 ---
 
 Removed the overflow between `c0` and `c1`. It didn't affect file size, but it feels prettier.
+
+---
+
+Replaced the `pdep`-based hash with a stupid byte-wise application of `crc32`. It's honestly ridiculous that a complex loop can be more optimal than, like, four instructions, but I guess `pdep` is just that big, and it requires a large immediate as well.
+
+There was one tricky part: how to mix the model into the hash, if we lose the bits of the model over the course of the algorithm? I initially thought I could just make the initial state `model << 8`, since I only add 8-bit values to the CRC, but that's actually broken. I'm not exactly sure *why*, but that produces low-quality results. I had to use a real `crc32` instruction to populate the initial state instead, but luckily it's not that long.
+
+2767 bytes.

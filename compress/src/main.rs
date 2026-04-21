@@ -30,18 +30,18 @@ impl Default for ModelCounter {
     }
 }
 
-fn model_mask(model: u8) -> u64 {
-    (0..8)
-        .map(|i| (((model >> i) & 1) as u64 * 0xFF) << (8 * i))
-        .sum()
-}
-
 impl ModelCounter {
     fn get_mut(&mut self, model: u8, prev_bytes: u64, next_byte: u8) -> &mut Counter {
-        let x86_model = ((model << 1) | 1).reverse_bits();
-        let mask = model_mask(x86_model);
-        let arg = ((prev_bytes << 8) | next_byte as u64).swap_bytes() & mask;
-        let hash = unsafe { core::arch::x86_64::_mm_crc32_u64(x86_model as u64, arg) } ^ arg;
+        let x86_model = (model << 1) | 1;
+        let arg = (prev_bytes << 8) | next_byte as u64;
+
+        let mut hash = unsafe { core::arch::x86_64::_mm_crc32_u8(0, x86_model) };
+        for i in (0..8).rev() {
+            if (x86_model >> i) & 1 == 1 {
+                hash = unsafe { core::arch::x86_64::_mm_crc32_u8(hash, (arg >> (i * 8)) as u8) };
+            }
+        }
+
         let key = (hash >> 1) as usize % self.map.len();
         &mut self.map[key]
     }
@@ -224,7 +224,7 @@ fn main() {
     let model_list = (0..=127u8)
         .rev()
         .filter(|i| models[*i as usize])
-        .map(|i| ((i << 1) | 1).reverse_bits())
+        .map(|i| (i << 1) | 1)
         .collect::<Vec<_>>();
     dbg!(model_list.len());
     println!("{model_list:02x?}");
