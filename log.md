@@ -1721,3 +1721,7 @@ I first found this trick [in Crinkler](https://github.com/runestubbe/Crinkler/bl
 ---
 
 We made a decoder. Nothing to write home about, but it works! The compressed code currently fits in 2830, but there's plenty of stuff to optimize.
+
+---
+
+Wrote a small script to see the disassembly of the built program. `objdump -d` can't normally disassemble ELF without section headers, so this was necessary.
