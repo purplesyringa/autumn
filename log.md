@@ -1792,3 +1792,7 @@ Replaced the `pdep`-based hash with a stupid byte-wise application of `crc32`. I
 There was one tricky part: how to mix the model into the hash, if we lose the bits of the model over the course of the algorithm? I initially thought I could just make the initial state `model << 8`, since I only add 8-bit values to the CRC, but that's actually broken. I'm not exactly sure *why*, but that produces low-quality results. I had to use a real `crc32` instruction to populate the initial state instead, but luckily it's not that long.
 
 2767 bytes.
+
+---
+
+Tried something interesting -- since `c0` and `c1` counters have the same type and are stored as a byte array, I can treat odd offsets as pairs of counter as well. This effectively adds twice as many keys to the hash table at the expense of twice as many collisions. This didn't affect the compression rate in any way, so it's not really useful, but it allows me to replace `and eax, 32 * 1024 * 1024 - 2` with `and eax, 32 * 1024 * 1024 - 1` if necessary. See the `open-table` branch.
