@@ -1766,3 +1766,7 @@ add eax, hash_table
 So I ignore the lowest bit of the `rax` and instead use a higher bit for entropy. Why this works is subtle: even though `crc32` is effectively pseudo-random, its value only depends on `rax ^ rdx`, so with this change, the lowest bit of `rax` no longer has a meaningful impact on the hash. (More specifically: `rax ^= 1, rdx ^= 1` keeps the hash intact). However, this is not actually a problem because `rax` is the model byte, which always has the bottom bit set.
 
 2802 bytes.
+
+---
+
+I *knew* `prev_bytes` should've been accessed directly from memory instead of being stored in a register. That frees up a REX-less register, replaces `shl rbx, 8` with `stos`, and is just cheaper overall. There has been a minor change to how hashes are calculated: previously, the least significant byte of `rbx` was most recent; now, the least significant byte of `[rdi - 8]` is oldest. This required me to bit-reverse models, and thus the badly mixed LSB of the model is no longer always `1`. However, this didn't have any impact on the compression rate, probably because few models depend on the oldest byte. 2794 bytes.

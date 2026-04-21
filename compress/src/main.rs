@@ -41,10 +41,10 @@ fn model_mask(model: u8) -> u64 {
 
 impl ModelCounter {
     fn get_mut(&mut self, model: u8, prev_bytes: u64, next_byte: u8) -> &mut Counter {
-        let shifted_model = (model << 1) | 1;
-        let mask = model_mask(shifted_model);
-        let arg = ((prev_bytes << 8) | next_byte as u64) & mask;
-        let hash = unsafe { core::arch::x86_64::_mm_crc32_u64(shifted_model as u64, arg) } ^ arg;
+        let x86_model = ((model << 1) | 1).reverse_bits();
+        let mask = model_mask(x86_model);
+        let arg = ((prev_bytes << 8) | next_byte as u64).swap_bytes() & mask;
+        let hash = unsafe { core::arch::x86_64::_mm_crc32_u64(x86_model as u64, arg) } ^ arg;
         let key = (hash >> 1) as usize % self.map.len();
         &mut self.map[key]
     }
@@ -226,7 +226,7 @@ fn main() {
     }
     let model_list = (0..=127u8)
         .filter(|i| models[*i as usize])
-        .map(|i| (i << 1) | 1)
+        .map(|i| ((i << 1) | 1).reverse_bits())
         .collect::<Vec<_>>();
     dbg!(model_list.len());
     println!("{model_list:02x?}");

@@ -40,11 +40,10 @@ program_header_end:
     ; Register allocation:
     ;
     ; Shared among all stages:
-    ; rbx (prev_bytes << 8) | next_byte
+    ; rbx -- value
     ; rdi -- current output byte
     ; rbp -- range
     ; r10 -- current input bit index
-    ; r12 -- value
     ;
     ; While decoding bits:
     ; r8 -- total c0
@@ -63,11 +62,11 @@ program_header_end:
 entry:
     mov edi, output_stream
     dec ebp
-    mov r12d, initial
+    mov ebx, initial
 
 decode_byte:
-    shl rbx, 8
-    inc bl
+    mov al, 1
+    stosb
 
 decode_bit:
     push 1
@@ -83,12 +82,12 @@ query_model:
     ; Load 8-bit mask
     lodsb
 
-    ; Extend mask to 64-bit
+    ; Extract bytes from `prev_bytes` according to mask
     pdep rdx, rax, [rel ones]
     imul rdx, 0xff
 
     ; Apply mask to `prev_bytes`
-    and rdx, rbx
+    and rdx, [rdi - 8]
 
     ; Compute hash table entry address
     crc32 rax, rdx
@@ -115,7 +114,7 @@ query_model:
     mul r14d
     div r8d
 
-    cmp r12d, eax
+    cmp ebx, eax
     sbb rdx, rdx ; bit = 0 => rdx = 0, bit = 1 => rdx = -1
     je bit0
 
@@ -125,13 +124,13 @@ query_model:
 
 bit0:
     ; bit = 0, x >= mid
-    sub r12d, eax
+    sub ebx, eax
     sub ebp, eax
     js bit_done
 
 increase_precision:
     bt [rel input_stream], r10
-    rcl r12d, 1
+    rcl ebx, 1
     inc r10d
     shl ebp, 1
     jns increase_precision
@@ -146,12 +145,10 @@ teach_model:
     loop teach_model
 
     shr dl, 1
-    rcl bl, 1
+    rcl [rdi - 1], 1
     jnc decode_bit
 
     ; Byte done
-    mov al, bl
-    stosb
     cmp di, output_stream_end & 0xffff
     jne decode_byte
 
@@ -175,6 +172,8 @@ input_stream_end:
 hash_table:
     resb 2 << 24
 
+    ; Align to a known address, as well as add a few preceding zeros so that `prev_bytes` is
+    ; computed correctly.
     resb output_stream - ($ - $$ + start)
 
 ; output_stream:
