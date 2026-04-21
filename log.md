@@ -1745,7 +1745,7 @@ Slightly optimized a branch in the AC decoder, down to 2811 bytes.
 
 ---
 
-A few more optimizations. Mostly minor and obvious, but there's one I really like. The old hash calculatin looked like this:
+A few more optimizations. Mostly minor and obvious, but there's one I really like. The old hash calculation looked like this:
 
 ```asm
 crc32 rax, rdx
