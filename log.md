@@ -1780,3 +1780,7 @@ It's a little trickier than that, actually -- looks like `CF = 1` comes not from
 ---
 
 Apparently `lodsb` is not always more efficient than typical instructions, since it takes up a register in a loop. Removing `lodsb` freed up `rsi`, which I could replace a REX register with. 2784 bytes.
+
+---
+
+Removed the overflow between `c0` and `c1`. It didn't affect file size, but it feels prettier.

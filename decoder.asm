@@ -141,7 +141,8 @@ bit_done:
     mov cl, models_end - models
 teach_model:
     pop rsi
-    add word [rsi], 0x0101
+    inc byte [rsi]
+    inc byte [rsi + 1]
     shr byte [rsi + rdx + 1], 1
     loop teach_model
 
