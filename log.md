@@ -1582,3 +1582,138 @@ As far as I can tell, that corresponds to the following list of errors:
 - `ENOSYS` (also not worth handling)
 
 We can probably map everything else to `EINVAL`. Implemented this, 4038/2491 bytes.
+
+---
+
+Yuki and I improved the arithmetic coder yesterday. Turns out I didn't quite understand AC!
+
+So the default AC implementation dumps a byte to output when `(l ^ r) >> 24 == 0`. There are two issues here: first, it requires the decoder to track three variables `l`, `r`, `x`, as opposed to just two, and second, the lack of translational symmetry means that you get worse compression quality if the interval gets smaller than `1/256`, but crosses the `i/256` boundary. This is less noticeable when dumping bytes, but it does matter when dumping bits, because then you can easily get this effect on the second reduction.
+
+So how do we fix this? Well, `(l ^ r) >> 24 == 0` is actually the wrong way to dump bytes, but to realize that, I had to find an interpretation of `(l & r) >> 24 == 0` that explained what's actually going on. The right way to interpret practical AC is *not* that we take AC and then introduce rounding to coordinates and it still works because it's consistent between the encoder and the decoder. No, the correct interpretation is that we round *the dynamic probability distribution* such that it's easier to encode/decode, but there is still logically a sequence of infinitely precise nested segments.
+
+What happens when we do `push(l >> 24); l <<= 8; r <<= 8; r |= 0xff;` is *not* "outputting bytes". It's actually increasing the hidden precision of the probabilities. It's easier to see this if you treat `l` and `r` as long integers, and only perform the `push` once at the end. The long integers `l` and `r` represent the exact range `[l/2^k; (r+1)/2^k)`, where `k` is usually not stored explicitly, but it is equal to 32 + the number of bits pushed to output so far.
+
+When computing `mid`/`threshold`, we effectively compute it in `k`-bit fixed point arithmetic, where the relative error grows as `r - l` shrinks. To keep compression rate steady, we need `r - l` to be roughly constant. That's what `(l ^ r) >> 24 == 0` *tries* to do, but it doesn't actually *succeed* at it. What we *actually* want here is simply `r - l < 2^24`, which has a very straightforward interpretation: if the precision grows too small, double it.
+
+So, treating `l` and `r` as long integers representing the half-closed range `[l; r)`, we want the encoder to do
+
+```rust
+// for each bit
+let len0 = round((r - l) * prob0);
+if bit == 0 {
+	r = l + len0;
+} else {
+	l += len0;
+}
+while r - l < 2^24 {
+	l <<= 8;
+	r <<= 8;
+}
+```
+
+...and when decoding, we want
+
+```rust
+// for each bit
+let len0 = round((r - l) * prob0);
+if (x truncated to the current precision) - l < len0 {
+	// bit 0
+	r = l + len0;
+} else {
+	// bit 1
+	l += len0;
+}
+while r - l < 2^24 {
+	l <<= 8;
+	r <<= 8;
+}
+```
+
+Truncation works because the logical bits of `l` to the right of the current precision are all zero, so the `<` comparison works exactly correctly. We're actually implementing `x - (l << k) < (len0 << k)`. In practice, truncation is implemented by reading in the new bits of `x` when the precision is increased.
+
+And *now* the decoder is translation-independent: we don't care about `l`, `r`, and `x` as three variables, we just need `(truncated x) - l` and `r - l`:
+
+```rust
+// for each bit
+let len0 = round(range_len * prob0);
+if offset < len0 {
+	// bit 0
+	range_len = len0;
+} else {
+	// bit 1
+	range_len -= len0;
+	offset -= len0;
+}
+while range_len < 2^24 {
+	offset = (offset << 8) | read_byte();
+	range_len <<= 8;
+}
+```
+
+This decoder both has better quality and requires fewer operations to implement.
+
+What about the encoder? Well, here's where things get tricky. Keep in mind that all the optimizations so far haven't change the encoder output or the probability distribution at all -- `l` and `r` are still logically long integers with infinite precision. Now, let's take a look at the encoder again and see what we can improve here:
+
+```rust
+// for each bit
+let len0 = round((r - l) * prob0);
+if bit == 0 {
+	r = l + len0;
+} else {
+	l += len0;
+}
+while r - l < 2^24 {
+	l <<= 8;
+	r <<= 8;
+}
+```
+
+First, we can store `r - l` instead of `r`. `r - l` is small and can be stored in a machine word, unlike `r`, so this is a performance improvement.
+
+```rust
+// for each bit
+let len0 = round(range_len * prob0);
+if bit == 0 {
+	range_len = len0;
+} else {
+	l += len0;
+	range_len -= len0;
+}
+while range_len < 2^24 {
+	l <<= 8;
+	range_len <<= 8;
+}
+```
+
+Now, let's take a precise look at what operations we apply to `l`:
+
+- `+=` with at most 32-bit number
+- `<<=`
+
+To implement this, we'll use an auxiliary data structure. We'll store the value of `l` in two places: the last (trailing) 32 bits will be stored in a machine word `lw`, and the rest of the bits will be stored in a bit sequence `lb`. So, `l = (lb << 32) | lw`.
+
+To add a 32-bit number to `l`, we add it to `lw`, and if we get a carry out, we apply it to `lb` by replacing a `011..1` suffix with `100..0`. To shift the value to the left by 8, we shift bits out of `lw` and into `lb`.
+
+```rust
+// for each bit
+let len0 = round(range_len * prob0);
+if bit == 0 {
+	range_len = len0;
+} else {
+	if (lw += len0 produces carry) {
+		lb++; // increment
+	}
+	range_len -= len0;
+}
+while range_len < 2^24 {
+	lb.push(lw >> 24);
+	lw <<= 8;
+	range_len <<= 8;
+}
+```
+
+Now the similarity with the XOR-based AC should shine through. `lb` is very similar to `out`, and `lw` is very similar to `l`. The contents of the `while` loop are *exactly* what XOR-based AC does, and `l += len0` is also familiar; the only two changes are `range_len < 2^24` instead of `(l ^ r) < 2^24` and passing the carry to `out`.
+
+Looking it AC from this prism, we can see that `out` is "actually" an approximation of `lb`. With XOR, we have to wait to increase precision until the bits in `out` are known precisely because we can't fix them afterwards. But if `out` is mutable (or we use a different auxiliary data structure), we can allow small ranges that cross the digit boundaries, under the assumption that we'll just fix the output afterwards if an overflow happens.
+
+I first found this trick [in Crinkler](https://github.com/runestubbe/Crinkler/blob/31d2354341243caf896ca9ae8ce9b3458d6be5ce/source/Compressor/AritCode.cpp) and was very confused about how it worked, because I didn't understand the purpose of carries. I only realized it's much more obvious if treated as an auxiliary data structure for long integers when reading [this paper](https://www.cs.cmu.edu/~aarti/Class/10704/Intro_Arith_coding.pdf), but it's so long and generic that it took me a while to figure out what the author meant. Hopefully my explanation is a little more accessible.
