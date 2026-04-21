@@ -1738,3 +1738,7 @@ Optimized the decoder a bit. I'm at 2813 bytes. There's nothing too interesting 
 - I store `c1` before `c0`, so that the value of the bit equals the index of the byte to right-shift.
 
 Also fixed a subtle bug: the interpreter didn't initialize the `register` `break_level` global, so when I used the register `r14` in the decoder, the interpreter broke.
+
+---
+
+Slightly optimized a branch in the AC decoder, down to 2811 bytes.

@@ -103,30 +103,29 @@ query_model:
     mov ax, [rax]
     movzx edx, ah
     movzx eax, al
-    add r8d, edx
-    add r14d, eax
+    add r8d, eax
+    add r14d, edx
 
     loop query_model
 
     ; We now know c0 and c1 
-    add r14d, r8d ; c1 += c0
+    add r8d, r14d ; c0 += c1
 
-    ; mid = range * c0 / (c0 + c1)
+    ; mid = range * c1 / (c0 + c1)
     mov eax, ebp
-    mul r8d
-    div r14d
+    mul r14d
+    div r8d
 
-    xor edx, edx
     cmp r12d, eax
-    setae dl
-    jae bit1
+    sbb rdx, rdx ; bit = 0 => rdx = 0, bit = 1 => rdx = -1
+    je bit0
 
-    ; bit = 0, x < mid
+    ; bit = 1, x < mid
     mov ebp, eax
     xor eax, eax
 
-bit1:
-    ; bit = 1, x >= mid
+bit0:
+    ; bit = 0, x >= mid
     sub r12d, eax
     sub ebp, eax
     js bit_done
@@ -144,7 +143,7 @@ bit_done:
 teach_model:
     pop rsi
     add word [rsi], 0x0101
-    shr byte [rsi + rdx], 1
+    shr byte [rsi + rdx + 1], 1
     loop teach_model
 
     shr dl, 1

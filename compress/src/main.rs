@@ -8,8 +8,8 @@ impl Counter {
     pub fn learn(&mut self, bit: u8) {
         self.c0 += 1;
         self.c1 += 1;
-        if self.c1 == 0 {
-            self.c0 += 1;
+        if self.c0 == 0 {
+            self.c1 += 1;
         }
         if bit == 0 {
             self.c1 /= 2;
@@ -77,7 +77,7 @@ impl Encoder {
 
     pub fn encode_bit(&mut self, bit: u8, numerator: usize, denominator: usize) {
         let mid = ((self.range as u64 * numerator as u64) / denominator as u64) as u32;
-        if bit == 0 {
+        if bit == 1 {
             self.range = mid;
         } else {
             let carry;
@@ -172,7 +172,7 @@ fn compress_with_models(
 
             let p = ((if bit == 0 { c0 } else { c1 }) << 16) / (c0 + c1);
             if !size_only {
-                encoder.encode_bit(bit, c0, c0 + c1);
+                encoder.encode_bit(bit, c1, c0 + c1);
             }
             size -= (p as f64 / 65536.).log2();
 
