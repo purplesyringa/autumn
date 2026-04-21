@@ -1302,7 +1302,7 @@ https://web-platform-tests.org/writing-tests/testharness-api.html According to t
 
 https://github.com/WebAssembly/spec/blob/main/test/harness/sync_index.js looks like the real deal: it has a call to `new WebAssembly.Module`. Looks like it provides methods like `print_*` as imports. But I don't see how the `(assert_return ...)` call in WAST is rewritten to a call of the JS function `assert_return`.
 
-There's an ML intepreter [here](https://github.com/WebAssembly/spec/tree/main/interpreter). Looks like it can
+There's an ML interpreter [here](https://github.com/WebAssembly/spec/tree/main/interpreter). Looks like it can
 
 > *export* test scripts to self-contained JavaScript test cases
 
@@ -1311,7 +1311,7 @@ There's [building documentation](https://github.com/WebAssembly/spec/blob/f9c743
 - Install `opaml`
 - `opaml init`
 - `opaml install dune menhir mdx zarith`
-- `make -C intepreter`
+- `make -C interpreter`
 
 ```
 $ ./interpreter/wasm
