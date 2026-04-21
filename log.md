@@ -1770,3 +1770,9 @@ So I ignore the lowest bit of the `rax` and instead use a higher bit for entropy
 ---
 
 I *knew* `prev_bytes` should've been accessed directly from memory instead of being stored in a register. That frees up a REX-less register, replaces `shl rbx, 8` with `stos`, and is just cheaper overall. There has been a minor change to how hashes are calculated: previously, the least significant byte of `rbx` was most recent; now, the least significant byte of `[rdi - 8]` is oldest. This required me to bit-reverse models, and thus the badly mixed LSB of the model is no longer always `1`. However, this didn't have any impact on the compression rate, probably because few models depend on the oldest byte. 2794 bytes.
+
+---
+
+Found a cool trick in Crinkler. Currently, when I switch to the next byte, I manually insert a `1` byte into the output stream. However, I can instead reuse the already-existing `rcl` instruction to effectively copy the just-shifted-out `1` from the previous byte into the current one.
+
+It's a little trickier than that, actually -- looks like `CF = 1` comes not from the previous byte, but from the comparison with `output_stream_end`. But it's close. 2788 bytes.

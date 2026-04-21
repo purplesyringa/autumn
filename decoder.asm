@@ -60,15 +60,20 @@ program_header_end:
     ; rdx -- calculated bit
 
 entry:
-    mov edi, output_stream
+    mov edi, output_stream - 1
     dec ebp
     mov ebx, initial
 
-decode_byte:
-    mov al, 1
-    stosb
+next_byte:
+    inc edi
+    cmp di, output_stream_end & 0xffff
+    je output_stream
+    ; If we're here, cmp set CF = 1, which is then inserted into the new byte by the `rcl` below.
 
-decode_bit:
+write_bit:
+    rcl byte [rdi], 1
+    jc next_byte
+
     push 1
     pop r8 ; c0
     mov r14d, r8d ; c1
@@ -87,7 +92,7 @@ query_model:
     imul rdx, 0xff
 
     ; Apply mask to `prev_bytes`
-    and rdx, [rdi - 8]
+    and rdx, [rdi - 7]
 
     ; Compute hash table entry address
     crc32 rax, rdx
@@ -145,15 +150,7 @@ teach_model:
     loop teach_model
 
     shr dl, 1
-    rcl [rdi - 1], 1
-    jnc decode_bit
-
-    ; Byte done
-    cmp di, output_stream_end & 0xffff
-    jne decode_byte
-
-ready:
-    jmp output_stream
+    jmp write_bit
 
 ones:
     dq 0x0101010101010101
