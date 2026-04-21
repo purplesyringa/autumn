@@ -1717,3 +1717,7 @@ Now the similarity with the XOR-based AC should shine through. `lb` is very simi
 Looking it AC from this prism, we can see that `out` is "actually" an approximation of `lb`. With XOR, we have to wait to increase precision until the bits in `out` are known precisely because we can't fix them afterwards. But if `out` is mutable (or we use a different auxiliary data structure), we can allow small ranges that cross the digit boundaries, under the assumption that we'll just fix the output afterwards if an overflow happens.
 
 I first found this trick [in Crinkler](https://github.com/runestubbe/Crinkler/blob/31d2354341243caf896ca9ae8ce9b3458d6be5ce/source/Compressor/AritCode.cpp) and was very confused about how it worked, because I didn't understand the purpose of carries. I only realized it's much more obvious if treated as an auxiliary data structure for long integers when reading [this paper](https://www.cs.cmu.edu/~aarti/Class/10704/Intro_Arith_coding.pdf), but it's so long and generic that it took me a while to figure out what the author meant. Hopefully my explanation is a little more accessible.
+
+---
+
+We made a decoder. Nothing to write home about, but it works! The compressed code currently fits in 2830, but there's plenty of stuff to optimize.

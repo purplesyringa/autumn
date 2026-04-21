@@ -906,7 +906,7 @@ DEF_IMPORT(random_get) {
         native_out = syscall3(SYS_getrandom, (long)(memory + buf), buf_len, 0);
         buf_len -= native_out;
         buf += native_out;
-    } while (native_out >= 0);
+    } while (native_out > 0);
     *stack_head = map_to_errno(native_out);
 }
 

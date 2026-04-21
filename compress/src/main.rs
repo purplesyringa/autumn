@@ -8,8 +8,8 @@ impl Counter {
     pub fn learn(&mut self, bit: u8) {
         self.c0 += 1;
         self.c1 += 1;
-        if self.c0 == 0 {
-            self.c1 += 1;
+        if self.c1 == 0 {
+            self.c0 += 1;
         }
         if bit == 0 {
             self.c1 /= 2;
@@ -33,11 +33,16 @@ impl Default for ModelCounter {
     }
 }
 
+fn model_mask(model: u8) -> u64 {
+    (0..8)
+        .map(|i| (((model >> i) & 1) as u64 * 0xFF) << (8 * i))
+        .sum()
+}
+
 impl ModelCounter {
-    fn get_mut(&mut self, model: u8, past_bytes: u64, next_byte: u8) -> &mut Counter {
-        let hash =
-            unsafe { core::arch::x86_64::_mm_crc32_u64(0, past_bytes << 8 | next_byte as u64) }
-                ^ model as u64;
+    fn get_mut(&mut self, model: u8, prev_bytes: u64, next_byte: u8) -> &mut Counter {
+        let arg = (prev_bytes & model_mask(model)) << 8 | next_byte as u64;
+        let hash = unsafe { core::arch::x86_64::_mm_crc32_u64(0, arg) } ^ ((model << 1) | 1) as u64;
         let key = hash as usize % self.map.len();
         &mut self.map[key]
     }
@@ -68,8 +73,8 @@ impl Encoder {
         }
     }
 
-    pub fn encode_bit(&mut self, bit: u8, prob0: u16) {
-        let mid = ((self.range as u64 * prob0 as u64) >> 16) as u32;
+    pub fn encode_bit(&mut self, bit: u8, numerator: usize, denominator: usize) {
+        let mid = ((self.range as u64 * numerator as u64) / denominator as u64) as u32;
         if bit == 0 {
             self.range = mid;
         } else {
@@ -102,8 +107,15 @@ impl Encoder {
         }
     }
 
-    pub fn finish(mut self) -> Vec<u8> {
+    pub fn finish(mut self) -> (u32, Vec<u8>) {
         self.finalize();
+        let initial = self
+            .bits
+            .drain(..32)
+            .enumerate()
+            .filter(|(_, b)| *b)
+            .map(|(i, _)| 1 << (31 - i))
+            .sum();
         self.pad_to_eight();
 
         let (bytes_bits, remainder) = self.bits.as_chunks::<8>();
@@ -123,22 +135,16 @@ impl Encoder {
             );
         }
 
-        out
+        (initial, out)
     }
 }
 
-fn model_mask(model: u8) -> u64 {
-    (0..8)
-        .map(|i| (((model >> i) & 1) as u64 * 0xFF) << (8 * i))
-        .sum()
-}
-
-fn apply_model_mask(prev_bytes: u64, model: u8) -> u64 {
-    prev_bytes & model_mask(model)
-}
-
 // TODO: weights (as popcnt)?
-fn compress_with_models(bytes: &[u8], models: &[bool; 128], size_only: bool) -> (f64, Vec<u8>) {
+fn compress_with_models(
+    bytes: &[u8],
+    models: &[bool; 128],
+    size_only: bool,
+) -> (f64, (u32, Vec<u8>)) {
     let mut encoder = Encoder::new();
     let mut size = 0.;
     let mut stats = ModelCounter::default();
@@ -157,22 +163,19 @@ fn compress_with_models(bytes: &[u8], models: &[bool; 128], size_only: bool) -> 
             let mut c0: usize = 1;
             let mut c1: usize = 1;
             for model in &models {
-                let c = stats.get_mut(*model, apply_model_mask(prev_bytes, *model), next_byte);
+                let c = stats.get_mut(*model, prev_bytes, next_byte);
                 c0 += c.c0 as usize;
                 c1 += c.c1 as usize;
             }
 
             let p = ((if bit == 0 { c0 } else { c1 }) << 16) / (c0 + c1);
             if !size_only {
-                let p0 = (c0 << 16) / (c0 + c1);
-                encoder.encode_bit(bit, p0 as u16);
+                encoder.encode_bit(bit, c0, c0 + c1);
             }
             size -= (p as f64 / 65536.).log2();
 
-            for model in &models {
-                stats
-                    .get_mut(*model, apply_model_mask(prev_bytes, *model), next_byte)
-                    .learn(bit);
+            for model in models.iter().rev() {
+                stats.get_mut(*model, prev_bytes, next_byte).learn(bit);
             }
 
             next_byte = next_byte * 2 + bit;
@@ -180,7 +183,11 @@ fn compress_with_models(bytes: &[u8], models: &[bool; 128], size_only: bool) -> 
         prev_bytes = prev_bytes << 8 | *byte as u64;
     }
 
-    let out = if !size_only { encoder.finish() } else { vec![] };
+    let out = if !size_only {
+        encoder.finish()
+    } else {
+        (0, vec![])
+    };
 
     (size / 8. + models.len() as f64, out)
 }
@@ -217,11 +224,13 @@ fn main() {
     }
     let model_list = (0..=127u8)
         .filter(|i| models[*i as usize])
+        .map(|i| (i << 1) | 1)
         .collect::<Vec<_>>();
     dbg!(model_list.len());
     println!("{model_list:02x?}");
     std::fs::write("../models.bin", model_list).unwrap();
-    let (_, compressed) = compress_with_models(&bytes, &models, false);
-    dbg!(compressed.len());
-    std::fs::write("../compressed.bin", compressed).unwrap();
+    let (_, (initial, out)) = compress_with_models(&bytes, &models, false);
+    dbg!(out.len());
+    std::fs::write("../initial.txt", format!("{initial}")).unwrap();
+    std::fs::write("../compressed.bin", out).unwrap();
 }
