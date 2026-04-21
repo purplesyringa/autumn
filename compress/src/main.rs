@@ -45,7 +45,7 @@ impl ModelCounter {
         let mask = model_mask(shifted_model);
         let arg = ((prev_bytes << 8) | next_byte as u64) & mask;
         let hash = unsafe { core::arch::x86_64::_mm_crc32_u64(shifted_model as u64, arg) } ^ arg;
-        let key = hash as usize % self.map.len();
+        let key = (hash >> 1) as usize % self.map.len();
         &mut self.map[key]
     }
 }

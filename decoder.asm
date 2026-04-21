@@ -75,7 +75,7 @@ decode_bit:
     mov r14d, r8d ; c1
 
     mov esi, models
-    mov ecx, models_end - models
+    mov cl, models_end - models
 
 query_model:
     xor eax, eax
@@ -93,16 +93,15 @@ query_model:
     ; Compute hash table entry address
     crc32 rax, rdx
     xor eax, edx
-    and eax, 16 * 1024 * 1024 - 1
-    lea eax, [rax * 2 + hash_table]
+    and eax, 32 * 1024 * 1024 - 2
+    add eax, hash_table
 
     ; Save address for later adjustment
     push rax
 
     ; Accumulate c0/c1
-    mov ax, [rax]
-    movzx edx, ah
-    movzx eax, al
+    movzx edx, byte [rax + 1]
+    movzx eax, byte [rax]
     add r8d, eax
     add r14d, edx
 
@@ -139,7 +138,7 @@ increase_precision:
 
 bit_done:
     ; Teach models
-    mov ecx, models_end - models
+    mov cl, models_end - models
 teach_model:
     pop rsi
     add word [rsi], 0x0101
@@ -153,7 +152,7 @@ teach_model:
     ; Byte done
     mov al, bl
     stosb
-    cmp edi, output_stream_end
+    cmp di, output_stream_end & 0xffff
     jne decode_byte
 
 ready:
@@ -180,4 +179,4 @@ hash_table:
 
 ; output_stream:
     resb output_len
-output_stream_end:
+    output_stream_end equ output_stream + output_len

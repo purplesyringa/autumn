@@ -1742,3 +1742,27 @@ Also fixed a subtle bug: the interpreter didn't initialize the `register` `break
 ---
 
 Slightly optimized a branch in the AC decoder, down to 2811 bytes.
+
+---
+
+A few more optimizations. Mostly minor and obvious, but there's one I really like. The old hash calculatin looked like this:
+
+```asm
+crc32 rax, rdx
+xor eax, edx
+and eax, 16 * 1024 * 1024 - 1
+lea eax, [rax * 2 + hash_table]
+```
+
+The new one looks like this:
+
+```asm
+crc32 rax, rdx
+xor eax, edx
+and eax, 32 * 1024 * 1024 - 2
+add eax, hash_table
+```
+
+So I ignore the lowest bit of the `rax` and instead use a higher bit for entropy. Why this works is subtle: even though `crc32` is effectively pseudo-random, its value only depends on `rax ^ rdx`, so with this change, the lowest bit of `rax` no longer has a meaningful impact on the hash. (More specifically: `rax ^= 1, rdx ^= 1` keeps the hash intact). However, this is not actually a problem because `rax` is the model byte, which always has the bottom bit set.
+
+2802 bytes.
