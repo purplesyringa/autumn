@@ -138,7 +138,6 @@ impl Encoder {
     }
 }
 
-// TODO: weights (as popcnt)?
 fn compress_with_models(
     bytes: &[u8],
     models: &[bool; 128],

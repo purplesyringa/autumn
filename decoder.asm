@@ -50,13 +50,14 @@ program_header_end:
     ; r14 -- total c1
     ;
     ; While querying models:
-    ; rax -- 8-bit mask / hash / counters
+    ; rax -- hash / counters
     ; rcx -- model count
-    ; rdx -- 64-bit mask / masked prev_bytes / c0
+    ; rdx -- 8-bit mask / c1
     ;
     ; Teaching models:
     ; rcx -- model counter
     ; rdx -- calculated bit
+    ; rsi -- hashtable entry pointer
 
 entry:
     mov edi, output_stream - 1
