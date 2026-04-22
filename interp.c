@@ -10,28 +10,29 @@
 unsigned char module_bytes[1024 * 1024];
 register unsigned char *p asm ("r12");
 
-static void copy_forward(void *dst, const void *src, size_t n) {
-    asm volatile ("rep movsb" : "+D"(dst), "+S"(src), "+c"(n) : : "memory");
-}
-
-static void copy_backward(void *dst, const void *src, size_t n) {
-    dst = (char *)dst + n - 1;
-    src = (char *)src + n - 1;
-    asm volatile ("std; rep movsb; cld" : "+D"(dst), "+S"(src), "+c"(n) : : "memory");
-}
-
 static void *memcpy(void *dst, const void *src, size_t n) {
-    copy_forward(dst, src, n);
-    return dst;
+    void *tmp = dst;
+    asm volatile ("rep movsb" : "+D"(dst), "+S"(src), "+c"(n) : : "memory");
+    return tmp;
 }
 
 static void *memmove(void *dst, const void *src, size_t n) {
-    if ((uintptr_t)src < (uintptr_t)dst) {
-        copy_forward(dst, src, n);
-    } else {
-        copy_backward(dst, src, n);
-    }
-    return dst;
+    void *tmp = dst;
+    asm volatile (
+        "cmp %0, %1;"
+        "jb 1f;" // src < dst
+        "add %k2, %k0;"
+        "dec %k0;"
+        "add %k2, %k1;"
+        "dec %k1;"
+        "std;"
+        "1: rep movsb;"
+        "cld"
+        : "+D"(dst), "+S"(src), "+c"(n)
+        :
+        : "memory"
+    );
+    return tmp;
 }
 
 static void *memset(void *s, int c, size_t n) {

@@ -1857,3 +1857,7 @@ After all too much time, I implemented a working `e8` encoder/decoder. The trick
 Worth noting that I had to change the register associated with `stack_head` from `r13` to `r15`, since the `r/m` byte (or something else, I didn't look too closely) for this register is `e8`, leading to false positives. Interestingly, this improved the compression rate even without the `e8` transform -- probably because the compressor was trying to learn how calls work anyway, and the random `e8`s in the middle of the instructions confused it.
 
 2751 -> 2702 bytes. 50% of the savings are from the `e8` transform, 50% are from removing `r13`.
+
+---
+
+Optimized `memmove` after looking at how musl implements it, now at 2700 bytes. On a second look, musl does something entirely different, so maybe I shouldn't give it credit.
