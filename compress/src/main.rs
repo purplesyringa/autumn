@@ -192,7 +192,7 @@ fn compress_with_models(
 }
 
 fn main() {
-    let bytes = std::fs::read("../interp-small.bin").unwrap();
+    let bytes = std::fs::read("../interp-small.e8.bin").unwrap();
     let mut models = [false; 128];
     let mut size = f64::INFINITY;
     dbg!(bytes.len());

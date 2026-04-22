@@ -1826,3 +1826,34 @@ It assumes gzip, though, and `zopfli` outputs *at least* 2777 bytes, and that's 
 ...and that's basically it. So not very useful.
 
 I guess the main thing left is weights then. I've simulated that by accident earlier, when I ignored a few bits of the masks, effectively allowing the same model to be mentioned more than once. Though now I'm realizing that it's subtly different from usual weights, since it kinda trains the models more than once -- but since the model bytes are different, apparently that distinction doesn't really surface?
+
+---
+
+I tried to replace `call read_uint` with `call r15`, where `r15` is initially populated with `read_uint`, but doing this in C turned out to be bad. Probably because indirect calls are assumed to clobber more registers than intended. I tried playing around with calling conventions, but that didn't help. So perhaps I need to implement the `e8` transform for real.
+
+Tried to `gdb` the binary while debugging the `e8` transform and got this cool error:
+
+```
+❌️ "/home/purplesyringa/tinywasm/./interp-small": not in executable format: file format not recognized
+```
+
+It straight up refuses to debug it! I checked which fields exactly it validates, and apparently it validates `e_shnum` among other values, which I overlap with `p_flags`. There's no way to set `p_flags = 7` and `e_shnum = 0` at the same time, so basically the only way to make the ELF valid for `gdb` is to remove overlapping altogether. I don't want to do that... No `gdb` for me, I guess.
+
+After all too much time, I implemented a working `e8` encoder/decoder. The tricky part was integrating it into the build pipeline -- `ld` doesn't output symbol addresses (or at least I couldn't figure out how to make it print a listing), so I had to hard-code some lengths and base addresses. The decoder itself is quite pretty:
+
+```asm
+	mov edi, start_addr
+	mov ecx, count
+	mov al, 0xe8
+.loop:
+	sub [rdi], edi
+	add edi, 4
+	repne scasb
+	je .loop
+```
+
+`start_addr` is initialized to the address of the first call target, with `e8` skipped. The loop patches the offset, skips over it, and looks for the next occurrence of `e8`. `repne scasb` skips over the last byte it finds, so `rdi` now points at the next offset; and `rcx` is tweaked such that it runs out right after the end of the file.
+
+Worth noting that I had to change the register associated with `stack_head` from `r13` to `r15`, since the `r/m` byte (or something else, I didn't look too closely) for this register is `e8`, leading to false positives. Interestingly, this improved the compression rate even without the `e8` transform -- probably because the compressor was trying to learn how calls work anyway, and the random `e8`s in the middle of the instructions confused it.
+
+2751 -> 2702 bytes. 50% of the savings are from the `e8` transform, 50% are from removing `r13`.

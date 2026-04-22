@@ -9,7 +9,10 @@ interp-debug: interp.c table.i make-rwx
 	./make-rwx $@
 
 interp-small.bin: interp.c table.i small.ld
-	$(CC) $< -o $@ $(OPTS) -Wall -Wextra -fno-stack-protector -nostdlib -static -fno-pie -fno-asynchronous-unwind-tables -T small.ld
+	$(CC) $< -o $@ $(OPTS) -Wall -Wextra -fno-stack-protector -nostdlib -static -fno-pie -fno-asynchronous-unwind-tables -T small.ld -D COMPRESSED
+
+interp-small.e8.bin: interp-small.bin e8-encode.py
+	python3 e8-encode.py <$< >$@
 
 table.i: interp.c make-table.py
 	python3 make-table.py
@@ -17,9 +20,9 @@ table.i: interp.c make-table.py
 make-rwx: make-rwx.c
 	$(CC) $< -o $@ -O2
 
-compressed.bin: interp-small.bin compress/src/main.rs
+compressed.bin: interp-small.e8.bin compress/src/main.rs
 	cd compress && cargo run --release
 
 interp-small: decoder.asm compressed.bin
-	nasm $< -o $@ -D output_len=$(shell stat -c %s interp-small.bin) -D initial=$(file <initial.txt)
+	nasm $< -o $@ -D output_len=$(shell stat -c %s interp-small.e8.bin) -D initial=$(file <initial.txt)
 	chmod +x $@

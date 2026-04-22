@@ -115,7 +115,7 @@ struct func_info funcs[4096];
 unsigned n_funcs;
 unsigned char memory[2 * 1024 * 1024];
 unsigned long stack[1024];
-register unsigned long *stack_head asm ("r13");
+register unsigned long *stack_head asm ("r15");
 unsigned long locals_stack[1024];
 unsigned long *locals = locals_stack + sizeof(locals_stack) / sizeof(locals_stack[0]);
 
@@ -1126,6 +1126,18 @@ asm (
     ".pushsection .text.start;"
     ".globl _start;"
     "_start:"
+
+#ifdef COMPRESSED
+    // e8 transform
+    "mov $0x12345678, %edi;" // substituted by a script
+    "mov $0x12345678, %ecx;"
+    "mov $0xe8, %al;"
+    "1: sub %edi, (%rdi);"
+    "add $4, %edi;"
+    "repne scasb;"
+    "je 1b;"
+#endif
+
     "pop %rdi;" // argc
     "mov %rsp, %rsi;" // argv
     "lea 8(%rsi,%rdi,8), %rdx;" // envp

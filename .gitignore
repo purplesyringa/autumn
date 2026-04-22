@@ -2,6 +2,7 @@ interp
 interp-debug
 interp-small
 interp-small.bin
+interp-small.e8.bin
 make-rwx
 table.i
 models.bin
