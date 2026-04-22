@@ -5,37 +5,25 @@
     org start
 
     db 0x7f, "ELF"
-    db 2 ; 64-bit
-    db 1 ; little-endian
-    db 1 ; version
-    db 3 ; Linux ABI
-    db 0 ; ABI version, ignored
-    times 7 db 0 ; padding
+    times 12 db 0 ; bitness, endianness, version, ABI, ABI version, padding -- all ignored
     dw 2 ; ET_EXEC
     dw 0x3e ; x86-64
-    dd 1 ; version
+    times 4 db 0 ; version, ignored
     dq entry ; entry point
     dq program_header - $$ ; program header
-    dq 0 ; section header, ignored
-    dd 0 ; flags
+    times 12 db 0 ; section header and flags, ignored
     dw elf_header_end - $$ ; header size
-    dw program_header_end - program_header ; program header entry size
-    dw 1 ; number of program header entries
-    dw 0 ; section header entry size
-    dw 0 ; number of section header entries
-    dw 0 ; .shstrtab section index
-elf_header_end:
-
+    dw 56 ; program header entry size
 program_header:
-    dd 1 ; PT_LOAD
-    dd 7 ; rwx
+    dw 1, 0 ; EH: number of program header entries, section header entry size, PH: PT_LOAD
+    dw 7, 0 ; EH: number of section header entries, .shstrtab section index, PH: rwx
+elf_header_end:
     dq 0 ; file offset
     dq $$ ; virtual address
-    dq 0 ; physical address
+    times 8 db 0 ; physical address, ignored
     dq input_stream_end - $$ ; file size
     dq 64 * 1024 * 1024 ; memory size
-    dq 0 ; alignment
-program_header_end:
+    ; 8 bytes of alignment, ignored
 
     ; Register allocation:
     ;

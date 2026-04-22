@@ -1796,3 +1796,13 @@ There was one tricky part: how to mix the model into the hash, if we lose the bi
 ---
 
 Tried something interesting -- since `c0` and `c1` counters have the same type and are stored as a byte array, I can treat odd offsets as pairs of counter as well. This effectively adds twice as many keys to the hash table at the expense of twice as many collisions. This didn't affect the compression rate in any way, so it's not really useful, but it allows me to replace `and eax, 32 * 1024 * 1024 - 2` with `and eax, 32 * 1024 * 1024 - 1` if necessary. See the `open-table` branch.
+
+---
+
+Trying to finally get rid of the bulky ELF headers.
+
+I initially tried the approach [from here](https://news.ycombinator.com/item?id=36662849), which significantly overlaps the program header with the ELF header, but there's an unmentioned subtle detail. Apparently, Linux validates that either the "size in file" field is at least as large as the actual file size, or that it exactly matches the "size in memory" field. With the overlap in that post, the bottom 16-bit word of "size in file" must be `1`, so the minimum "size in file" is 65537 and thus the first condition can't hold. The second one holds in the "Hello, world!" example, but in our case, we want `.bss`, so we can't make it hold.
+
+So I had to use the approach [from the original post](https://nathanotterness.com/2021/10/tiny_elf_modernized.html). I've overlapped headers a little (2751 bytes), but I haven't inlined code into free space in the headers yet, since I'm not 100% certain about the code -- I still need to try some methods of improving compression.
+
+For example, bringing back `popcount` weights should improve compression by ~10 bytes. Perhaps adding weights in general can be good, and logistic mixing is also something I need to try -- if oneKpaq does it, perhaps I can as well.
