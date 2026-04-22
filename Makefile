@@ -17,9 +17,9 @@ table.i: interp.c make-table.py
 make-rwx: make-rwx.c
 	$(CC) $< -o $@ -O2
 
-compressed.bin models.bin initial.txt: interp-small.bin compress/src/main.rs
+compressed.bin: interp-small.bin compress/src/main.rs
 	cd compress && cargo run --release
 
-interp-small: decoder.asm compressed.bin models.bin initial.txt
+interp-small: decoder.asm compressed.bin
 	nasm $< -o $@ -D output_len=$(shell stat -c %s interp-small.bin) -D initial=$(file <initial.txt)
 	chmod +x $@
