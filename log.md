@@ -1806,3 +1806,23 @@ I initially tried the approach [from here](https://news.ycombinator.com/item?id=
 So I had to use the approach [from the original post](https://nathanotterness.com/2021/10/tiny_elf_modernized.html). I've overlapped headers a little (2751 bytes), but I haven't inlined code into free space in the headers yet, since I'm not 100% certain about the code -- I still need to try some methods of improving compression.
 
 For example, bringing back `popcount` weights should improve compression by ~10 bytes. Perhaps adding weights in general can be good, and logistic mixing is also something I need to try -- if oneKpaq does it, perhaps I can as well.
+
+---
+
+Not sure what's up with logistic mixing... I tried copying the implementation from oneKpaq, but it's worse than straightforward addition. Which kind of makes sense if you think about it, after all logistic mixing doesn't boost models whose predictions were right recently, but it's just night and day, like a 250-byte difference.
+
+Thoughts on general-purpose improvements so far, pulled [from this presentation](http://ftp.kameli.net/pub/fit/misc/presis_asm06.pdf):
+
+Experimenting with GCC flags seems useful. `-O1` is still worse than `-Os`, and apparently `-Oz` is also worse despite having better uncompressed size, most likely because of less structured code patterns. I also tried other optimization options, but they don't really do anything, unfortunately.
+
+Here's a shell-based decompression stub:
+
+```
+a=/tmp/I;tail -n+2 $0|zcat>$a;chmod +x $a;$a;rm $a;exit
+```
+
+It assumes gzip, though, and `zopfli` outputs *at least* 2777 bytes, and that's without ELF headers, so it's worse than our compression.
+
+...and that's basically it. So not very useful.
+
+I guess the main thing left is weights then. I've simulated that by accident earlier, when I ignored a few bits of the masks, effectively allowing the same model to be mentioned more than once. Though now I'm realizing that it's subtly different from usual weights, since it kinda trains the models more than once -- but since the model bytes are different, apparently that distinction doesn't really surface?

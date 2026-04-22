@@ -166,11 +166,12 @@ fn compress_with_models(
                 c1 += c.c1 as usize;
             }
 
-            let p = ((if bit == 0 { c0 } else { c1 }) << 16) / (c0 + c1);
+            let p = ((if bit == 0 { c0 } else { c1 }) as f64) / ((c0 + c1) as f64);
+            size -= p.log2();
+
             if !size_only {
                 encoder.encode_bit(bit, c1, c0 + c1);
             }
-            size -= (p as f64 / 65536.).log2();
 
             for model in models.iter().rev() {
                 stats.get_mut(*model, prev_bytes, next_byte).learn(bit);
