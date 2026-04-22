@@ -138,21 +138,12 @@ impl Encoder {
     }
 }
 
-fn compress_with_models(
-    bytes: &[u8],
-    models: &[bool; 128],
-    size_only: bool,
-) -> (f64, (u32, Vec<u8>)) {
+fn compress_with_models(bytes: &[u8], models: &[u8], size_only: bool) -> (f64, (u32, Vec<u8>)) {
     let mut encoder = Encoder::new();
     let mut size = 0.;
     let mut stats = ModelCounter::default();
     let mut prev_bytes = 0;
-    let models = models
-        .iter()
-        .enumerate()
-        .filter(|(_i, v)| **v)
-        .map(|(i, _v)| i as u8)
-        .collect::<Vec<_>>();
+    let n = models.len();
     for byte in bytes {
         let mut next_byte = 1;
         for bit_index in (0..8).rev() {
@@ -160,7 +151,7 @@ fn compress_with_models(
 
             let mut c0: usize = 1;
             let mut c1: usize = 1;
-            for model in &models {
+            for model in models {
                 let c = stats.get_mut(*model, prev_bytes, next_byte);
                 c0 += c.c0 as usize;
                 c1 += c.c1 as usize;
@@ -188,44 +179,46 @@ fn compress_with_models(
         (0, vec![])
     };
 
-    (size / 8. + models.len() as f64, out)
+    (size / 8. + n as f64, out)
+}
+
+fn try_push(model: u8, models: &mut Vec<u8>, size: &mut f64, bytes: &[u8]) {
+    models.push(model);
+    let (next_size, _) = compress_with_models(bytes, models, true);
+    if next_size >= *size {
+        models.pop();
+        return;
+    }
+
+    *size = next_size;
+    println!("A{model:02x}/{model:08b}: {size}");
+
+    let mut i = 0;
+    while i < models.len() {
+        let model = models.remove(i);
+        let (next_size, _) = compress_with_models(bytes, models, true);
+        if next_size >= *size {
+            models.insert(i, model);
+            i += 1;
+        } else {
+            *size = next_size;
+            println!("R{model:02x}/{model:08b}: {size}");
+        }
+    }
 }
 
 fn main() {
     let bytes = std::fs::read("../interp-small.e8.bin").unwrap();
-    let mut models = [false; 128];
-    let mut size = f64::INFINITY;
     dbg!(bytes.len());
-    for model in 0..=127 {
-        models[model] = true;
-        let (next_size, _) = compress_with_models(&bytes, &models, true);
-        if next_size >= size {
-            models[model] = false;
-        } else {
-            size = next_size;
-            println!("A{model:02x}/{model:08b}: {size}");
 
-            // try remove
-            for i in 0..model {
-                if !models[i] {
-                    continue;
-                }
-                models[i] = false;
-                let (next_size, _) = compress_with_models(&bytes, &models, true);
-                if next_size >= size {
-                    models[i] = true;
-                } else {
-                    size = next_size;
-                    println!("R{i:02x}/{i:08b}: {size}");
-                }
-            }
-        }
+    let mut models = vec![];
+    let mut size = f64::INFINITY;
+
+    for model in 0..=127 {
+        try_push(model, &mut models, &mut size, &bytes);
     }
-    let model_list = (0..=127u8)
-        .rev()
-        .filter(|i| models[*i as usize])
-        .map(|i| (i << 1) | 1)
-        .collect::<Vec<_>>();
+
+    let model_list = models.iter().map(|i| (i << 1) | 1).collect::<Vec<_>>();
     dbg!(model_list.len());
     println!("{model_list:02x?}");
     std::fs::write("../models.bin", model_list).unwrap();
