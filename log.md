@@ -1861,3 +1861,7 @@ Worth noting that I had to change the register associated with `stack_head` from
 ---
 
 Optimized `memmove` after looking at how musl implements it, now at 2700 bytes. On a second look, musl does something entirely different, so maybe I shouldn't give it credit.
+
+---
+
+Yuki added "weights" to models by trying to add the same model multiple times. Oddly, this works *much* better with "overfitting", where multiple occurrences of the same model access the same hash table entry, compared to more fair methods. I have no idea why exactly it works like this, maybe because it effectively boost weights even more? Weird stuff. Anyway, That saves 55 bytes, and we're now at 2645 bytes compressed.
