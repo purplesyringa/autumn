@@ -183,26 +183,28 @@ fn compress_with_models(bytes: &[u8], models: &[u8], size_only: bool) -> (f64, (
 }
 
 fn try_push(model: u8, models: &mut Vec<u8>, size: &mut f64, bytes: &[u8]) {
-    models.push(model);
-    let (next_size, _) = compress_with_models(bytes, models, true);
-    if next_size >= *size {
-        models.pop();
-        return;
-    }
-
-    *size = next_size;
-    println!("A{model:02x}/{model:08b}: {size}");
-
-    let mut i = 0;
-    while i < models.len() {
-        let model = models.remove(i);
+    loop {
+        models.push(model);
         let (next_size, _) = compress_with_models(bytes, models, true);
         if next_size >= *size {
-            models.insert(i, model);
-            i += 1;
-        } else {
-            *size = next_size;
-            println!("R{model:02x}/{model:08b}: {size}");
+            models.pop();
+            break;
+        }
+
+        *size = next_size;
+        println!("A{model:02x}/{model:08b}: {size}");
+
+        let mut i = 0;
+        while i < models.len() {
+            let model = models.remove(i);
+            let (next_size, _) = compress_with_models(bytes, models, true);
+            if next_size >= *size {
+                models.insert(i, model);
+                i += 1;
+            } else {
+                *size = next_size;
+                println!("R{model:02x}/{model:08b}: {size}");
+            }
         }
     }
 }
