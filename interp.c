@@ -3,6 +3,7 @@
 #include <immintrin.h>
 #include <stdint.h>
 // #include <stdio.h>
+#include <sys/stat.h>
 #include <sys/syscall.h>
 #include <sys/uio.h>
 #include <time.h>
@@ -139,7 +140,7 @@ struct caller_info {
     };
     // unsigned funcidx;
 };
-struct caller_info caller_stack[1024];
+struct caller_info caller_stack[4096];
 struct caller_info *caller_stack_head = caller_stack;
 register unsigned break_level asm ("r14");
 
@@ -924,6 +925,52 @@ DEF_IMPORT(fd_prestat_get) {
     stack_head++; // output buffer
     // fd is overwritten
     *stack_head = 8; // EBADF
+}
+
+DEF_IMPORT(fd_fdstat_get) {
+    unsigned buf = *stack_head++;
+    unsigned fd = *stack_head;
+
+    static struct stat linux_stat;
+    int out = syscall2(SYS_fstat, fd, (long)&linux_stat);
+    if (out != 0) {
+        *stack_head = map_to_errno(out);
+        return;
+    }
+
+    __attribute__((packed))
+    struct wasi_stat {
+        unsigned char filetype;
+        unsigned char _padding1;
+        unsigned short fdflags;
+        unsigned _padding2;
+        unsigned long rights_base;
+        unsigned long rights_inheriting;
+    };
+    struct wasi_stat *wasi_stat = (struct wasi_stat *)(memory + buf);
+
+    static unsigned char file_types[16] = {
+        0, 0,
+        2 /* character device */, 0,
+        3 /* directory */, 0,
+        1 /* block device */, 0,
+        4 /* regular file */, 0,
+        7 /* symbolic link */
+    };
+    wasi_stat->filetype = file_types[linux_stat.st_mode >> 12];
+
+    int linux_fdflags = syscall2(SYS_fcntl, fd, F_GETFL);
+    unsigned short wasi_fdflags = 0;
+    wasi_fdflags |= linux_fdflags & O_APPEND ? 0x1 : 0;
+    wasi_fdflags |= linux_fdflags & O_DSYNC ? 0x2 : 0;
+    wasi_fdflags |= linux_fdflags & O_NONBLOCK ? 0x4 : 0;
+    wasi_fdflags |= linux_fdflags & (O_SYNC & ~O_DSYNC) ? 0x10 : 0;
+    wasi_stat->fdflags = wasi_fdflags;
+
+    unsigned long rights = fd == 0 ? 0x2 /* FD_READ */ : 0x40 /* FD_WRITE */;
+    wasi_stat->rights_base = wasi_stat->rights_inheriting = rights;
+
+    *stack_head = 0;
 }
 
 DEF_IMPORT(clock_time_get) {

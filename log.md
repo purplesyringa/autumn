@@ -1948,3 +1948,125 @@ asm ("sub $8, %0" : "+r"(stack_head) :: "flags");
 did, so I think I need to try making a `push` function for this.
 
 That shaved off about 10 bytes.
+
+---
+
+[This looks like a good definition](https://docs.rs/wasip1/latest/wasip1/struct.Fdstat.html) of the `fdstat` type. [This looks like a better one](https://wasmerio.github.io/wasmer/crates/doc/wasmer_wasix/types/wasi/struct.Fdstat.html).
+
+`fstat` can fail for the following reasons:
+
+- `EBADF`
+- `ENOMEM` -- Out of memory (i.e., kernel memory).
+- `EOVERFLOW` -- path or fd refers to a file whose size, inode number, or number of blocks cannot be represented in, respectively, the types off_t, ino_t, or blkcnt_t.
+
+Only `EBADF` looks realistic, and we already support it.
+
+Why is `mode_t` documented in `inode(7)` instead of `mode_t(3type)`??
+
+I'm confused how WASI represents pipes. It certainly supported them, but what `filetype` do they correspond to? The `wasmer` type doesn't mention it. Neither does `wasip1`. Is it supposed to be `unknown`? It *looks* like [wasmtime maps wasip2 `pipe` to wasip1 `unknown`](https://docs.wasmtime.dev/api/src/wasi_common/snapshots/preview_1.rs.html#1350), so apparently so.
+
+Okay, wait, it's *worse* than `stat`. The output includes `fdflags`, which are obtained by `fcntl(fd, F_GETFL)`.
+
+Linux does not implement `O_RSYNC`. Man pages say glibc aliases `O_RSYNC` to `O_SYNC`. Does this mean I need to set `O_RSYNC` to `0` or the same as `O_SYNC`? wasmtime forwards it to rustix's `O_RSYNC`, which equals `O_SYNC`, so probably the latter.
+
+This is gonna be a rabbit hole. glibc defines `O_SYNC = 04010000`. Linux uapi says:
+
+```c
+/*
+ * Before Linux 2.6.33 only O_DSYNC semantics were implemented, but using
+ * the O_SYNC flag.  We continue to use the existing numerical value
+ * for O_DSYNC semantics now, but using the correct symbolic name for it.
+ * This new value is used to request true Posix O_SYNC semantics.  It is
+ * defined in this strange way to make sure applications compiled against
+ * new headers get at least O_DSYNC semantics on older kernels.
+ *
+ * This has the nice side-effect that we can simply test for O_DSYNC
+ * wherever we do not care if O_DSYNC or O_SYNC is used.
+ *
+ * Note: __O_SYNC must never be used directly.
+ */
+#ifndef O_SYNC
+#define __O_SYNC    04000000
+#define O_SYNC      (__O_SYNC|O_DSYNC)
+#endif
+```
+
+So, I'm confused. When I check for `(fdflags & O_SYNC) != 0`, I get `true` even if `O_SYNC` is not set, but `O_DSYNC` is set, right? Surely this is incorrect and `O_SYNC` shouldn't be set in this case. I'm assuming I should write `(fdflags & O_SYNC) == O_SYNC` instead, and everyone who does it otherwise is wrong? This is stupid, no? I'm assuming the correct behavior is to check for `(fdflags & __O_SYNC) != 0` instead, even though it "must never be used directly". Except that since userland headers dont' define it, it's actually spelled `O_SYNC & ~O_DSYNC`... It's such a mess.
+
+Took me a while to figure out, I even [wrote a post](https://purplesyringa.moe/blog/wait-if-flags-and-o_sync_is-wrong/) about this. New info: `O_RSYNC` is not really supported by Linux, so IMO the right behavior is to not set the WASI `RSYNC` flag at all.
+
+Next up: permissions. This is a big set:
+
+```rust
+const FD_DATASYNC             = 1 << 0;
+const FD_READ                 = 1 << 1;
+const FD_SEEK                 = 1 << 2;
+const FD_FDSTAT_SET_FLAGS     = 1 << 3;
+const FD_SYNC                 = 1 << 4;
+const FD_TELL                 = 1 << 5;
+const FD_WRITE                = 1 << 6;
+const FD_ADVISE               = 1 << 7;
+const FD_ALLOCATE             = 1 << 8;
+const PATH_CREATE_DIRECTORY   = 1 << 9;
+const PATH_CREATE_FILE        = 1 << 10;
+const PATH_LINK_SOURCE        = 1 << 11;
+const PATH_LINK_TARGET        = 1 << 12;
+const PATH_OPEN               = 1 << 13;
+const FD_READDIR              = 1 << 14;
+const PATH_READLINK           = 1 << 15;
+const PATH_RENAME_SOURCE      = 1 << 16;
+const PATH_RENAME_TARGET      = 1 << 17;
+const PATH_FILESTAT_GET       = 1 << 18;
+const PATH_FILESTAT_SET_SIZE  = 1 << 19;
+const PATH_FILESTAT_SET_TIMES = 1 << 20;
+const FD_FILESTAT_GET         = 1 << 21;
+const FD_FILESTAT_SET_SIZE    = 1 << 22;
+const FD_FILESTAT_SET_TIMES   = 1 << 23;
+const PATH_SYMLINK            = 1 << 24;
+const PATH_REMOVE_DIRECTORY   = 1 << 25;
+const PATH_UNLINK_FILE        = 1 << 26;
+const POLL_FD_READWRITE       = 1 << 27;
+```
+
+It looks like [wasmtime uses a complex algorithm for this](https://github.com/bytecodealliance/wasmtime/blob/c7ce29746b115b744211c8119c6f6c012445ae1d/crates/wasi/src/p1.rs#L1402-L1523), but since we only support stdio for now, we can just return `FD_READ` or `FD_WRITE` according to the fd.
+
+Now it crashes in `call_indirect` -- it's invoked with `0x40000000` on stack, which is certainly wrong. And that's with `caller_stack_head - caller_stack = 1162`, so somewhere really deep. That kinda sucks for debugging... but I'll have to do this, because the function this happens in -- `$js_new_shape2` -- is invoked from many locations, and worked correctly the first ten times I put a breakpoint on it with `b call_func if funcidx == 187`.
+
+Tried printing `caller_stack`:
+
+```
+0x19
+0x5b
+0x5c
+0x176
+0x151
+0x178
+0xaa
+0xaa
+0xaa
+0xaa
+0xaa
+0xaa
+0x2
+0x0
+0x6
+0x0
+0x2f568
+0x2f167
+0x2f168
+0x7fffffdb
+0x2f4ca
+0x0
+0x2f570
+0x2f4a0
+0x10
+0x0
+0x437058
+0x0
+0x9e
+0xbb
+```
+
+What is `0x7fffffdb`? Oh, wait, that must be it -- `caller_stack` is 1024 entries long, and we have a deeper recursion level. I'll try increasing it. That fixed it -- now it crashes in unimplemented `poll_oneoff`. This looks similar to `poll`, I'll take a look at it in a bit.
+
+For now, we're at 2861 bytes. `fd_fdstat_get` costs more than 100 bytes compressed -- I'll see if I can optimize it.
