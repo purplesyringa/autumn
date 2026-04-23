@@ -2161,3 +2161,12 @@ I couldn't find a way to make GCC duplicate the epilogue, so I had to use inline
 Yuki and I have been toying around with the idea of pre-training the models on the decompressor code. This complicates the decoder, but should reduce the initial costs of learning x86. I can at least try and see how the compressed data size is affected.
 
 Looks like this saves... 8 bytes. Okay, nevermind then.
+
+---
+
+Trying to make core dumps not so hard on the disk. I know two simple and reasonable ways to achieve this:
+
+- `madvise(MADV_DONTDUMP)` on the `memory` array.
+- `brk` on initial allocation and `memory.grow`.
+
+The former looks cheaper and still makes sense. It also gave me a reason to page-align `memory`. 2838 bytes.

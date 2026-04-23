@@ -3,6 +3,7 @@
 #include <immintrin.h>
 #include <stdint.h>
 // #include <stdio.h>
+#include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
 #include <sys/uio.h>
@@ -10,7 +11,7 @@
 #include <unistd.h>
 
 // Put this symbol after the rest of the .bss so that all relocations fit in 32 bits.
-__attribute__((section(".bss.memory")))
+__attribute__((section(".bss.memory"), aligned(4096)))
 unsigned char memory[0x100000007]; // 7 bytes for OOB accesses in `load`
 unsigned long memory_pages;
 unsigned max_memory_pages = 1 << 16;
@@ -1051,6 +1052,8 @@ int main(int argc, char **argv, char **envp) {
     (void)argc;
     args = argv + 1;
     environ = envp;
+
+    syscall3(SYS_madvise, (long)memory, sizeof(memory) & -4096, MADV_DONTDUMP);
 
     int fd = syscall2(SYS_open, (long)argv[1], O_RDONLY);
     int len = syscall3(SYS_read, fd, (long)module_bytes, sizeof(module_bytes));
