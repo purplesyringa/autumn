@@ -1913,3 +1913,38 @@ https://github.com/WebAssembly/wasi-clocks#detailed-design-discussion says:
 So where do I find this mapping? Maybe that's just for wasip2. https://docs.rs/wasi-core/latest/wasi_core/wasi_unstable/fn.clock_time_get.html always uses `u64` (supposedly nanoseconds), so that's what I'm gonna use.
 
 Now it's stuck on `fd_fdstat_get`. What is it trying to do? Maybe `isatty`? `fd = 0`, so probably yes. That's an entire `stat` call. Man, that's gonna be costly...
+
+---
+
+I looked at the disassembly for the new methods and realized that actually, `clock_time_get` is not that expensive -- WASI clock IDs are equal to Linux clock IDs! So the `switch` I used for mapping is cheap and can be replaced with an `if`. I also won a bytes by making `tp` a `static`.
+
+I was confused at the lowering for `memory.size` for a bit:
+
+```asm
+mov    rax, r15
+lea    r15, [r15-0x8]
+mov    qword [rax-0x8], rdx
+```
+
+Why is it using `rax-0x8` instead of `r15`? But now I think I get it: it's assuming that because `stack_head` is a global, it should be optimized as if it requires a memory access, despite being a register. Replacing
+
+```c
+*--stack_head = memory_pages;
+```
+
+with
+
+```c
+stack_head--;
+*stack_head = memory_pages;
+```
+
+didn't help, but implementing subtraction with
+
+```c
+asm ("sub $8, %0" : "+r"(stack_head) :: "flags");
+```
+
+did, so I think I need to try making a `push` function for this.
+
+That shaved off about 10 bytes.

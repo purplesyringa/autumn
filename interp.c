@@ -153,6 +153,12 @@ static void call_func(unsigned funcidx);
         __attribute__((unused)) unsigned char arg \
     )
 
+static void push(unsigned long value) {
+    // `*--stack_head = value;`, but more optimized.
+    asm ("sub $8, %0" : "+r"(stack_head) :: "flags");
+    *stack_head = value;
+}
+
 DEF(unknown) {
     __builtin_trap();
 }
@@ -206,7 +212,7 @@ DEF(end, 0x0b) {
                     if (caller->has_result) {
                         unsigned long value = *stack_head++;
                         stack_head = caller->saved_stack_head;
-                        *--stack_head = value;
+                        push(value);
                     } else {
                         stack_head = caller->saved_stack_head;
                     }
@@ -277,7 +283,7 @@ DEF(select, 0x1b) {
 DEF(local_get, 0x20) {
     unsigned localidx = read_uint();
     PARSED;
-    *--stack_head = locals[localidx];
+    push(locals[localidx]);
 }
 
 DEF(local_set_like, 0x21 = 1 /* local.set */, 0x22 = 0 /* local.tee */) {
@@ -290,7 +296,7 @@ DEF(local_set_like, 0x21 = 1 /* local.set */, 0x22 = 0 /* local.tee */) {
 DEF(global_get, 0x23) {
     unsigned globalidx = read_uint();
     PARSED;
-    *--stack_head = globals[globalidx];
+    push(globals[globalidx]);
 }
 
 DEF(global_set, 0x24) {
@@ -360,7 +366,7 @@ DEF(
 DEF(memory_size, 0x3f) {
     p++; // memidx
     PARSED;
-    *--stack_head = memory_pages;
+    push(memory_pages);
 }
 
 DEF(memory_grow, 0x40) {
@@ -379,7 +385,7 @@ DEF(memory_grow, 0x40) {
 DEF(int_const, 0x41 /* i32.const */, 0x42 /* i64.const */) {
     long c = read_sint();
     PARSED;
-    *--stack_head = opcode & 1 ? (unsigned)c : c;
+    push(opcode & 1 ? (unsigned)c : c);
 }
 
 DEF(float_const, 0x43 = 4 /* f32.const */, 0x44 = 8 /* f64.const */) {
@@ -390,7 +396,7 @@ DEF(float_const, 0x43 = 4 /* f32.const */, 0x44 = 8 /* f64.const */) {
     if (opcode == 0x43) { // f32.const
         value &= -1U;
     }
-    *--stack_head = value;
+    push(value);
 }
 
 DEF(
@@ -925,21 +931,16 @@ DEF_IMPORT(clock_time_get) {
     stack_head++; // precision
     unsigned long clock_id = *stack_head;
 
-    switch (clock_id) {
-    case 0: clock_id = CLOCK_REALTIME; break;
-    case 1: clock_id = CLOCK_MONOTONIC; break;
-    case 2: clock_id = CLOCK_PROCESS_CPUTIME_ID; break;
-    case 3: clock_id = CLOCK_THREAD_CPUTIME_ID; break;
-    default:
+    // Clock IDs directly correspond to Linux clock IDs.
+    if (clock_id >= 4) {
         *stack_head = 28; // EINVAL
         return;
     }
 
-    struct timespec tp;
+    static struct timespec tp;
     syscall2(SYS_clock_gettime, clock_id, (long)&tp);
     unsigned long timestamp = tp.tv_sec * 1000000000UL + tp.tv_nsec;
     __builtin_memcpy(memory + out_ptr, &timestamp, 8);
-
     *stack_head = 0;
 }
 
