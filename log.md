@@ -2121,3 +2121,31 @@ So it's *almost* in order. It sounds like `pext` might help here:
 In fact, I think we can even avoid masking out. Here's the thing: POSIX draws a difference between file *status* flags, which are associated with file *descriptors*, and file *descriptor* flags. `O_CLOEXEC` is from the latter group and is thus not reported by `F_GETFL`, so the bit corresponding to it (`1 << 19`) is guaranteed to be zero.
 
 This brings it down to 2845 bytes.
+
+---
+
+Maybe I can even use a 32-bit `pext` mask if I carefully overlap flags with known-zeros. Here are the flags guaranteed to be zero:
+
+- `O_CLOEXEC = 02000000`
+- `O_CREAT = 0100`
+- `O_DIRECTORY = 0200000`
+- `O_EXCL = 0200`
+- `O_NOCTTY = 0400`
+- `O_NOFOLLOW = 0400000`
+- `O_TMPFILE & !O_DIRECTORY = 020000000` -- uh oh, found a bug in the kernel due to this :)
+- `O_TRUNC = 01000`
+
+Using `A`/`B`/`C`/`D` for the bits we need to extract in that order, `0` for known zeroes, and `*` for unknown bits, we get:
+
+```
+0*D0*00***BCA0000******
+```
+
+It seems like right-shifting by 4 and ORing gives me:
+
+```
+0*D0*00***BCA0000******
+             0*D0*00***BCA0000******
+```
+
+This still requires 34 bits, but if I add right-shifts, I can fit it in 24 bits. Unfortunately the compressor doesn't appreciate this cleverness.
