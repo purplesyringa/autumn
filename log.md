@@ -2170,3 +2170,15 @@ Trying to make core dumps not so hard on the disk. I know two simple and reasona
 - `brk` on initial allocation and `memory.grow`.
 
 The former looks cheaper and still makes sense. It also gave me a reason to page-align `memory`. 2838 bytes.
+
+---
+
+Back to `poll_oneoff`. Surely this one will be the last one... I'm almost out of space.
+
+I tried to look at approximately how much compressed space each large part of the interpreter takes, and got the following results:
+
+- Parsing: 460 bytes
+- Opcodes: 1092 bytes
+- Imports: 569 bytes
+
+So opcodes *are* valuable to optimize and I'll probably need to switch to assembly for that. Good to know for future work. For now, I'll need to see how big `poll_oneoff` is.
