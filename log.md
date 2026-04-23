@@ -2155,3 +2155,9 @@ This still requires 34 bits, but if I add right-shifts, I can fit it in 24 bits.
 Tried out an optimization I've been hoping for for a while. Currently, `PARSED` generates a conditional jump to the `ret` instruction in the current function's epilogue. If I could make it always use its own prologue, `PARSED` should look exactly the same in all invocations and thus be easier to compress.
 
 I couldn't find a way to make GCC duplicate the epilogue, so I had to use inline assembly. That's unfortunately unsound, but it saves too much space to ignore -- we're down to 2822 bytes.
+
+---
+
+Yuki and I have been toying around with the idea of pre-training the models on the decompressor code. This complicates the decoder, but should reduce the initial costs of learning x86. I can at least try and see how the compressed data size is affected.
+
+Looks like this saves... 8 bytes. Okay, nevermind then.
