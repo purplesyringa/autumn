@@ -2149,3 +2149,9 @@ It seems like right-shifting by 4 and ORing gives me:
 ```
 
 This still requires 34 bits, but if I add right-shifts, I can fit it in 24 bits. Unfortunately the compressor doesn't appreciate this cleverness.
+
+---
+
+Tried out an optimization I've been hoping for for a while. Currently, `PARSED` generates a conditional jump to the `ret` instruction in the current function's epilogue. If I could make it always use its own prologue, `PARSED` should look exactly the same in all invocations and thus be easier to compress.
+
+I couldn't find a way to make GCC duplicate the epilogue, so I had to use inline assembly. That's unfortunately unsound, but it saves too much space to ignore -- we're down to 2822 bytes.
