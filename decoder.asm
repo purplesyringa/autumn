@@ -22,7 +22,7 @@ elf_header_end:
     dq $$ ; virtual address
     times 8 db 0 ; physical address, ignored
     dq input_stream_end - $$ ; file size
-    dq 64 * 1024 * 1024 ; memory size
+    dq 0x103000000 ; memory size
     ; 8 bytes of alignment, ignored
 
     ; Register allocation:

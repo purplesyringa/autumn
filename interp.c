@@ -5,9 +5,16 @@
 // #include <stdio.h>
 #include <sys/syscall.h>
 #include <sys/uio.h>
+#include <time.h>
 #include <unistd.h>
 
-unsigned char module_bytes[1024 * 1024];
+// Put this symbol after the rest of the .bss so that all relocations fit in 32 bits.
+__attribute__((section(".bss.memory")))
+unsigned char memory[0x100000007]; // 7 bytes for OOB accesses in `load`
+unsigned long memory_pages;
+unsigned max_memory_pages = 1 << 16;
+
+unsigned char module_bytes[3 * 1024 * 1024];
 register unsigned char *p asm ("r12");
 
 static void *memcpy(void *dst, const void *src, size_t n) {
@@ -114,7 +121,6 @@ unsigned start_funcidx = -1;
 unsigned long func_table[1024];
 struct func_info funcs[4096];
 unsigned n_funcs;
-unsigned char memory[2 * 1024 * 1024];
 unsigned long stack[1024];
 register unsigned long *stack_head asm ("r15");
 unsigned long locals_stack[1024];
@@ -352,13 +358,22 @@ DEF(
 }
 
 DEF(memory_size, 0x3f) {
+    p++; // memidx
     PARSED;
-    *--stack_head = sizeof(memory) - 7;
+    *--stack_head = memory_pages;
 }
 
 DEF(memory_grow, 0x40) {
+    p++; // memidx
     PARSED;
-    *stack_head = -1U;
+    unsigned long out = memory_pages;
+    unsigned long increase = *stack_head;
+    if (memory_pages + increase <= max_memory_pages) {
+        memory_pages += increase;
+    } else {
+        out = -1;
+    }
+    *stack_head = out;
 }
 
 DEF(int_const, 0x41 /* i32.const */, 0x42 /* i64.const */) {
@@ -899,6 +914,35 @@ DEF_IMPORT(fd_write) {
     fd_op(SYS_writev);
 }
 
+DEF_IMPORT(fd_prestat_get) {
+    stack_head++; // output buffer
+    // fd is overwritten
+    *stack_head = 8; // EBADF
+}
+
+DEF_IMPORT(clock_time_get) {
+    unsigned out_ptr = *stack_head++;
+    stack_head++; // precision
+    unsigned long clock_id = *stack_head;
+
+    switch (clock_id) {
+    case 0: clock_id = CLOCK_REALTIME; break;
+    case 1: clock_id = CLOCK_MONOTONIC; break;
+    case 2: clock_id = CLOCK_PROCESS_CPUTIME_ID; break;
+    case 3: clock_id = CLOCK_THREAD_CPUTIME_ID; break;
+    default:
+        *stack_head = 28; // EINVAL
+        return;
+    }
+
+    struct timespec tp;
+    syscall2(SYS_clock_gettime, clock_id, (long)&tp);
+    unsigned long timestamp = tp.tv_sec * 1000000000UL + tp.tv_nsec;
+    __builtin_memcpy(memory + out_ptr, &timestamp, 8);
+
+    *stack_head = 0;
+}
+
 DEF_IMPORT(random_get) {
     unsigned buf_len = *stack_head++;
     unsigned buf = *stack_head;
@@ -1016,6 +1060,14 @@ int main(int argc, char **argv, char **envp) {
             // printf("%u function signatures\n", n_sigs);
             for (unsigned i = 0; i < n_sigs; i++) {
                 funcs[n_funcs + i].typeidx = read_uint();
+            }
+        } else if (section_type == 5) {
+            // Memory section
+            p++; // 1 memory
+            _Bool has_limit = *p++;
+            memory_pages = read_uint();
+            if (has_limit) {
+                max_memory_pages = read_uint();
             }
         } else if (section_type == 6) {
             // Global section

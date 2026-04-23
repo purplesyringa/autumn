@@ -1865,3 +1865,51 @@ Optimized `memmove` after looking at how musl implements it, now at 2700 bytes. 
 ---
 
 Yuki added "weights" to models by trying to add the same model multiple times. Oddly, this works *much* better with "overfitting", where multiple occurrences of the same model access the same hash table entry, compared to more fair methods. I have no idea why exactly it works like this, maybe because it effectively boost weights even more? Weird stuff. Anyway, That saves 55 bytes, and we're now at 2645 bytes compressed.
+
+---
+
+I'm realizing I'm doing nothing useful because there seems to be nothing interesting left to add. Is there anything in the WASI ecosystem that I could run for a wow-effect?
+
+[This page](https://runno.dev/wasi/) mentions QuickJS, that sounds like it could be an interesting demo. Here's their QuickJS Wasm executable: https://runno.dev/wasi-demos/quickjs.wasi.wasm. It segfaults, of course, but I'm used to that.
+
+Oh, it segfaults because the binary takes 2.5 MiB, and I only map the first 1 MiB of the input.
+
+This time it crashes on an `unreachable` instruction. Where? Call stack:
+
+```
+$_start
+$__wasilibc_init_preopen
+$malloc
+$dlmalloc
+$sbrk
+```
+
+The confusing part is that the only `unreachable` in `$sbrk` is after `call $abort`, so I'd expect `unreachable` to trigger there rather than directly in `$sbrk`.
+
+Oh, I think I made a bug when parsing `memory.grow`. Shouldn't it take a memory argument? Yup. And same with `memory.size`.
+
+This time `unreachable` is hit in `$__wasilibc_init_preopen`. This one *does* contain a call to `(unreachable)`. Looks like `$calloc` returned 0? It seems to be related to `memory.grow`, which means I lowkey need to actually implement it.
+
+Looking up the docs for `memory.grow`. Thins to keep in mind:
+
+> Failure must occur if the referenced memory instance has a maximum size defined that would be exceeded.
+
+> If len [in pages] is larger than 2^16, then fail.
+
+Can I put the data in `.bss`? Surely?
+
+Yuki figured out that I can run `gdb` on `interp-small` by running it on `sh` first, and then doing `r -c "./interp-small quickjs.wasi.wasm"`. If I need to place a breakpoint, I can do `b main; r ...; b execve; c; stepi until syscall; del 1; stepi`. Eugh.
+
+`ulimit -c 0` (or equivalent) is a must -- the core dumps are now enormous due to storing 4 GiB in `.bss`. Ideally I'd set this limit in the interpreter itself, so that other people running it don't have their disk ruined, but I can't just do `prctl(PR_SET_DUMPABLE, 0)` because it also disables `ptrace`. Maybe `setrlimit(RLIMIT_CORE, ...)` would work instead, but I need to check.
+
+QuickJS now fails due to the unimplemented `fd_prestat_get` syscall. It's supposed to provide info about preopened file descriptors, since WASI isn't always allowed to open new ones. Looks like QuickJS only requests info about FDs starting with 3, so not stdio, and thus we can just return `EBADF` unconditionally.
+
+Next up is `clock_time_get`. It takes a clock ID, and I don't see where they are documented. wasmer implements [two clocks](https://docs.rs/wasmer-wasi-types/latest/wasmer_wasi_types/wasi/enum.Clockid.html): realtime (ID 0) and monotonic (ID 1). But it seems like QuickJS assumes clock 2 exists in `$clock`, most likely corresponding to [this 4-element enum](https://docs.rs/wasmer-wasi-types/latest/wasmer_wasi_types/wasi/enum.Snapshot0Clockid.html). https://github.com/WebAssembly/wasi-clocks#considered-alternatives says wasip1 included four clocks, but then I don't get why wasmer calls the enum `Snapshot0Clockid`. Does "snapshot" refer to something else here?
+
+https://github.com/WebAssembly/wasi-clocks#detailed-design-discussion says:
+
+> And so, this API uses different data types for different types of clocks.
+
+So where do I find this mapping? Maybe that's just for wasip2. https://docs.rs/wasi-core/latest/wasi_core/wasi_unstable/fn.clock_time_get.html always uses `u64` (supposedly nanoseconds), so that's what I'm gonna use.
+
+Now it's stuck on `fd_fdstat_get`. What is it trying to do? Maybe `isatty`? `fd = 0`, so probably yes. That's an entire `stat` call. Man, that's gonna be costly...
