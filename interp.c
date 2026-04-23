@@ -959,12 +959,18 @@ DEF_IMPORT(fd_fdstat_get) {
     };
     wasi_stat->filetype = file_types[linux_stat.st_mode >> 12];
 
-    int linux_fdflags = syscall2(SYS_fcntl, fd, F_GETFL);
-    unsigned short wasi_fdflags = 0;
-    wasi_fdflags |= linux_fdflags & O_APPEND ? 0x1 : 0;
-    wasi_fdflags |= linux_fdflags & O_DSYNC ? 0x2 : 0;
-    wasi_fdflags |= linux_fdflags & O_NONBLOCK ? 0x4 : 0;
-    wasi_fdflags |= linux_fdflags & (O_SYNC & ~O_DSYNC) ? 0x10 : 0;
+    unsigned linux_fdflags = syscall2(SYS_fcntl, fd, F_GETFL);
+    unsigned long dup = linux_fdflags | ((unsigned long)linux_fdflags << 32);
+    unsigned long mask = (
+        // ordered by increasing bit index
+        O_APPEND
+        | O_DSYNC
+        | ((unsigned long)O_NONBLOCK << 32)
+        | ((unsigned long)O_CLOEXEC << 32) // known zero
+        | ((unsigned long)(O_SYNC & ~O_DSYNC) << 32)
+    );
+    unsigned long wasi_fdflags;
+    asm ("pext %2, %1, %0" : "=r"(wasi_fdflags) : "r"(mask), "r"(dup));
     wasi_stat->fdflags = wasi_fdflags;
 
     unsigned long rights = fd == 0 ? 0x2 /* FD_READ */ : 0x40 /* FD_WRITE */;

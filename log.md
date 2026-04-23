@@ -2070,3 +2070,54 @@ Tried printing `caller_stack`:
 What is `0x7fffffdb`? Oh, wait, that must be it -- `caller_stack` is 1024 entries long, and we have a deeper recursion level. I'll try increasing it. That fixed it -- now it crashes in unimplemented `poll_oneoff`. This looks similar to `poll`, I'll take a look at it in a bit.
 
 For now, we're at 2861 bytes. `fd_fdstat_get` costs more than 100 bytes compressed -- I'll see if I can optimize it.
+
+---
+
+This simple snippet takes 30 bytes compressed:
+
+```c
+unsigned short wasi_fdflags = 0;
+wasi_fdflags |= linux_fdflags & O_APPEND ? 0x1 : 0;
+wasi_fdflags |= linux_fdflags & O_DSYNC ? 0x2 : 0;
+wasi_fdflags |= linux_fdflags & O_NONBLOCK ? 0x4 : 0;
+wasi_fdflags |= linux_fdflags & (O_SYNC & ~O_DSYNC) ? 0x10 : 0;
+```
+
+Surely this can be improved? GCC compiles it like this:
+
+```asm
+mov    edx, eax
+mov    ecx, eax
+sar    edx, 0xa
+sar    ecx, 0xb
+and    ecx, 0x2
+and    edx, 0x1
+or     edx, ecx
+mov    ecx, eax
+sar    eax, 0x10
+sar    ecx, 0x9
+and    eax, 0x10
+and    ecx, 0x4
+or     edx, ecx
+or     edx, eax
+```
+
+So just a ton of shifts and single-bit ANDs. Let's see which order the bits are stored in:
+
+```c
+unsigned short wasi_fdflags = 0;
+wasi_fdflags |= (linux_fdflags >> 10) & 1 ? 0x1 : 0; // O_APPEND
+wasi_fdflags |= (linux_fdflags >> 12) & 1 ? 0x2 : 0; // O_DSYNC
+wasi_fdflags |= (linux_fdflags >> 11) & 1 ? 0x4 : 0; // O_NONBLOCK
+wasi_fdflags |= (linux_fdflags >> 20) & 1 ? 0x10 : 0; // __O_SYNC
+```
+
+So it's *almost* in order. It sounds like `pext` might help here:
+
+- Duplicate the 32-bit `linux_fdflags` value into two halves of the 64-bit register.
+- Extract bits in the right order with `pext`.
+- Mask out the `0x8` bit.
+
+In fact, I think we can even avoid masking out. Here's the thing: POSIX draws a difference between file *status* flags, which are associated with file *descriptors*, and file *descriptor* flags. `O_CLOEXEC` is from the latter group and is thus not reported by `F_GETFL`, so the bit corresponding to it (`1 << 19`) is guaranteed to be zero.
+
+This brings it down to 2845 bytes.
