@@ -2236,3 +2236,7 @@ Saved two (!) bytes in the decoder with `push`/`pop` -- thanks Yuki.
 ---
 
 Moved the `initial` constant to the data section by setting the initial range to `2` instead of `u32::MAX`. This still keeps one bit in `initial`, but it's always reset in our case because the decompressed data starts with a `1` bit. The size remains the same, but it should simplify inlining later.
+
+---
+
+Inlined the first few instructions of decoder into the ELF header. There's still about 12 unused bytes left, but they're spread as 8 + 4, so it's not clear what to put there. 3158 bytes.

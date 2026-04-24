@@ -4,27 +4,6 @@
     bits 64
     org start
 
-    db 0x7f, "ELF"
-    times 12 db 0 ; bitness, endianness, version, ABI, ABI version, padding -- all ignored
-    dw 2 ; ET_EXEC
-    dw 0x3e ; x86-64
-    times 4 db 0 ; version, ignored
-    dq entry ; entry point
-    dq program_header - $$ ; program header
-    times 12 db 0 ; section header and flags, ignored
-    dw elf_header_end - $$ ; header size
-    dw 56 ; program header entry size
-program_header:
-    dw 1, 0 ; EH: number of program header entries, section header entry size, PH: PT_LOAD
-    dw 7, 0 ; EH: number of section header entries, .shstrtab section index, PH: rwx
-elf_header_end:
-    dq 0 ; file offset
-    dq $$ ; virtual address
-    times 8 db 0 ; physical address, ignored
-    dq input_stream_end - $$ ; file size
-    dq 0x103000000 ; memory size
-    ; 8 bytes of alignment, ignored
-
     ; Register allocation:
     ;
     ; Shared among all stages:
@@ -46,15 +25,41 @@ elf_header_end:
     ; rdx -- calculated bit
     ; rsi -- hashtable entry pointer
 
-entry:
-    mov edi, output_stream - 1
-    mov bpl, 2
+    db 0x7f, "ELF"
 
+    ; 12 bytes: bitness, endianness, version, ABI, ABI version, padding -- all ignored
+entry:
+    mov edi, output_stream - 1 ; 5
+    mov bpl, 2 ; 3
 next_byte:
-    inc edi
-    cmp di, output_stream_end & 0xffff
-    je output_stream
-    ; If we're here, cmp set CF = 1, which is then inserted into the new byte by the `rcl` below.
+    inc edi ; 2
+    jmp next_byte2 ; 2
+
+    dw 2 ; ET_EXEC
+    dw 0x3e ; x86-64
+    times 4 db 0 ; version, ignored
+    dq entry ; entry point
+    dq program_header - $$ ; program header
+
+    ; 12 bytes: section header and flags, ignored
+next_byte2:
+    cmp di, output_stream_end & 0xffff ; 5
+    ; If we're not done, cmp sets CF, which is inserted into the new byte by `rcl` in `write_bit`.
+    jne write_bit ; 2
+    jmp output_stream ; 5
+
+    dw elf_header_end - $$ ; header size = 0x40
+    dw 56 ; program header entry size
+program_header:
+    dw 1, 0 ; EH: number of program header entries, section header entry size, PH: PT_LOAD
+    dw 7, 0 ; EH: number of section header entries, .shstrtab section index, PH: rwx
+elf_header_end:
+    dq 0 ; file offset
+    dq $$ ; virtual address
+    times 8 db 0 ; physical address, ignored
+    dq input_stream_end - $$ ; file size
+    dq 0x103000000 ; memory size
+    ; 8 bytes of alignment, ignored
 
 write_bit:
     rcl byte [rdi], 1
