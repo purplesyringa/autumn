@@ -1,4 +1,4 @@
-OPTS := -Os -fno-align-functions -fno-align-jumps -fno-align-labels -fno-align-loops -msse4.2 -fno-jump-tables -mno-red-zone
+OPTS := -Os -fno-align-functions -fno-align-jumps -fno-align-labels -fno-align-loops -msse4.2 -fno-jump-tables -mno-red-zone -mpreferred-stack-boundary=3
 
 interp: interp.c table.i make-rwx
 	$(CC) $< -o $@ $(OPTS) -Wall -Wextra -g -fno-stack-protector -nostdlib -static -fno-pie

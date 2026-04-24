@@ -2339,3 +2339,17 @@ While searching for this info, I noticed that our supported set is close to [Lim
 So I just got a wild idea. When compressing data, we iterate over bits from MSB to LSB, since supposedly that models context better. So BE would supposedly work better than LE, if only we could switch endianness -- which we can't... but what if we reverse the byte array? Sure, that'll prevent the contents from forming a prefix code, but who knows if it'll still work well! I need to try this.
 
 So, first of all: can we confirm that MSB-to-LSB is better than LSB-to-MSB? I tried the latter, and it generated a 3085 byte output file. Makes sense. Now what if we reverse the input? And... 2968 bytes. Unfortunate, but it's still data.
+
+---
+
+Writing the `extended-const` loop got me thinking:
+
+```c
+do {
+    eval_instr();
+} while (*p != 0x0b); // end
+```
+
+This looks *very* simple -- simpler than the current logic of handling `end`. I switched from recursion to `caller_stack` in hopes that using the native stack for data might be more optimal, but it *feels* like the entropy from using `r15` is lower than implementing blocks in a non-recursive manner, so with compression, it's better to use stack for recursion.
+
+So I implemented it and got 2886 bytes, a 82 byte reduction -- probably because it removed lots of memory accesses to `caller_stack`. It feels worthwhile, but I don't know if optimizing the stack for data might still be better... Surely not? I just don't want to commit to this because it's really brittle -- adding calls to opcode implementations made GCC introduce `push`/`pop`s in `op_call` unnecessarily, and while I could workaround it, it's certainly not a 100% reliable option. But it'll have to do.

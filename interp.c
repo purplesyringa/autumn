@@ -80,6 +80,8 @@ struct read_int_output {
     unsigned char shift;
 };
 
+// For some reason this function insists on increasing the required stack alignment, so all of its
+// direct callers must be `noinline`.
 __attribute__((noinline))
 static struct read_int_output impl_read_int() {
     unsigned char shift = 64;
@@ -98,11 +100,13 @@ static struct read_int_output impl_read_int() {
     };
 }
 
+__attribute__((noinline))
 static unsigned long read_uint() {
     struct read_int_output out = impl_read_int();
     return out.value >> out.shift;
 }
 
+__attribute__((noinline))
 static long read_sint() {
     struct read_int_output out = impl_read_int();
     return (long)out.value >> out.shift;
@@ -124,20 +128,6 @@ unsigned long stack[1024];
 register unsigned long *stack_head asm ("r15");
 unsigned long locals_stack[1024];
 unsigned long *locals = locals_stack + sizeof(locals_stack) / sizeof(locals_stack[0]);
-
-struct caller_info {
-    unsigned char opcode;
-    unsigned char *saved_p;
-    unsigned long *saved_stack_head;
-    unsigned n_results;
-    union {
-        _Bool skipped_if;
-        unsigned long *saved_locals;
-    };
-    // unsigned funcidx;
-};
-struct caller_info caller_stack[4096];
-struct caller_info *caller_stack_head = caller_stack;
 register unsigned break_level asm ("r14");
 
 static void call_func(unsigned funcidx);
@@ -162,6 +152,8 @@ static void push(unsigned long value) {
     *stack_head = value;
 }
 
+static void eval_instr();
+
 DEF(unknown) {
     __builtin_trap();
 }
@@ -181,48 +173,38 @@ DEF(
 ) {}
 
 DEF(block_like, 0x02 /* block */, 0x03 /* loop */, 0x04 /* if */) {
+    unsigned char *saved_p = p - 1;
+
     unsigned char blocktype = *p++;
     unsigned n_results = blocktype != 0x40;
     _Bool skipped_if = break_level == 0 && opcode == 0x04 && !*stack_head++;
-    *caller_stack_head++ = (struct caller_info) {
-        .opcode = opcode,
-        .saved_p = p - 2,
-        .saved_stack_head = stack_head,
-        .n_results = n_results,
-        .skipped_if = skipped_if,
-        // .funcidx = -1,
-    };
+
+    unsigned long *saved_stack_head = stack_head;
     break_level += break_level > 0 || skipped_if;
-}
 
-DEF(else, 0x05) {
-    break_level += break_level == 0;
-    break_level -= caller_stack_head[-1].skipped_if;
-}
+    while (*p != 0x0b) {
+        if (*p == 0x05) {
+            break_level += break_level == 0;
+            break_level -= skipped_if;
+            p++;
+        } else {
+            eval_instr();
+        }
+    }
+    p++; // end
 
-DEF(end, 0x0b) {
-    struct caller_info *caller = --caller_stack_head;
-    unsigned n_copies = caller->n_results;
-    if (caller->opcode == 0x10 /* call */) {
-        break_level = 0;
-        locals = caller->saved_locals;
-        p = caller->saved_p;
-    } else {
-        if (break_level > 0) {
-            break_level--;
-            if (break_level == 0) {
-                if (caller->opcode == 0x03) { // loop
-                    p = caller->saved_p;
-                    n_copies = 0;
-                }
-            }
+    if (break_level > 0) {
+        break_level--;
+        if (break_level == 0 && opcode == 0x03) { // loop
+            p = saved_p;
+            n_results = 0;
         }
     }
 
     if (break_level == 0) {
-        unsigned long *new_stack_head = caller->saved_stack_head - n_copies;
+        unsigned long *new_stack_head = saved_stack_head - n_results;
         // This copy can overlap, but our `memcpy` copies data in the right direction.
-        memcpy(new_stack_head, stack_head, n_copies * sizeof(*stack_head));
+        memcpy(new_stack_head, stack_head, n_results * sizeof(*stack_head));
         stack_head = new_stack_head;
     }
 }
@@ -816,13 +798,7 @@ static void call_func(unsigned funcidx) {
     struct func_info *info = &funcs[funcidx];
     if (info->typeidx == -1U) {
         // native code
-        asm volatile (
-            "call *%0"
-            :
-            : "a"(info->func)
-            : "memory", "flags", "rcx", "rdx", "rsi", "rdi", "r8", "r9", "r10", "r11"
-            // this should ideally also list xmm registers but eugh
-        );
+        ((void (*)())info->func)();
         return;
     }
 
@@ -852,15 +828,20 @@ static void call_func(unsigned funcidx) {
     stack_head += n_args;
     p = body_p;
 
-    // printf("push func\n");
-    *caller_stack_head++ = (struct caller_info) {
-        .opcode = 0x10 /* call */,
-        .saved_p = saved_p,
-        .saved_stack_head = stack_head,
-        .n_results = n_results,
-        .saved_locals = saved_locals,
-        // .funcidx = funcidx,
-    };
+    unsigned long *saved_stack_head = stack_head;
+
+    while (*p != 0x0b) {
+        eval_instr();
+    }
+
+    break_level = 0;
+    locals = saved_locals;
+    p = saved_p;
+
+    unsigned long *new_stack_head = saved_stack_head - n_results;
+    // This copy can overlap, but our `memcpy` copies data in the right direction.
+    memcpy(new_stack_head, stack_head, n_results * sizeof(*stack_head));
+    stack_head = new_stack_head;
 }
 
 #define N_ERRNOS 10
@@ -1275,14 +1256,11 @@ int main(int argc, char **argv, char **envp) {
     }
 
     p = NULL;
-    call_func(main_funcidx);
+    break_level = 0;
     if (start_funcidx != (unsigned)-1) {
         call_func(start_funcidx);
     }
-    break_level = 0;
-    while (p) {
-        eval_instr();
-    }
+    call_func(main_funcidx);
 }
 
 asm (
