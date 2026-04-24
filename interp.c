@@ -1122,6 +1122,8 @@ int main(int argc, char **argv, char **envp) {
     int fd = syscall2(SYS_open, (long)argv[1], O_RDONLY);
     int len = syscall3(SYS_read, fd, (long)module_bytes, sizeof(module_bytes));
 
+    stack_head = stack + sizeof(stack) / sizeof(stack[0]);
+
     p = module_bytes + 8;
     while (p != module_bytes + len) {
         unsigned char section_type = *p++;
@@ -1198,27 +1200,13 @@ int main(int argc, char **argv, char **envp) {
             // printf("%u globals\n", n_globals);
 
             for (unsigned i = 0; i < n_globals; i++) {
-                unsigned char valtype = *p++;
+                p++; // valtype
                 p++; // mut
-                p++; // t.const
-                switch (valtype) {
-                case 0x7f:
-                case 0x7e:
-                    // i32/i64
-                    globals[i] = read_uint();
-                    break;
-                case 0x7d:
-                    // f32
-                    __builtin_memcpy(&globals[i], p, 4);
-                    p += 4;
-                    break;
-                case 0x7c:
-                    // f64
-                    __builtin_memcpy(&globals[i], p, 8);
-                    p += 8;
-                    break;
-                }
+                do {
+                    eval_instr();
+                } while (*p != 0x0b); // end
                 p++; // end
+                globals[i] = *stack_head++;
             }
         } else if (section_type == 7) {
             // Export section
@@ -1287,7 +1275,6 @@ int main(int argc, char **argv, char **envp) {
     }
 
     p = NULL;
-    stack_head = stack + sizeof(stack) / sizeof(stack[0]);
     call_func(main_funcidx);
     if (start_funcidx != (unsigned)-1) {
         call_func(start_funcidx);

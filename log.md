@@ -2321,3 +2321,15 @@ I've cut multivalues, but not other features. 2958 bytes, it almost fits.
 ---
 
 Had to drop `proc_raise`, I have no idea how else to improve the size, save for rewriting in assembly, the effect of which I can't estimate. 2943 bytes, I think this will have to do for now.
+
+---
+
+Trying to figure out how to compile programs for the exact supported feature set. For Clang, the options `-target wasm32-wasip1 -mcpu=mvp -mbulk-memory-opt -mcall-indirect-overlong -mmutable-globals -msign-ext` should work. For Rust, it's supposedly `-C target=wasm32-wasip1 -C target-cpu=mvp -C target-feature=+bulk-memory-opt,+call-indirect-overlong,+mutable-globals,+sign-ext`.
+
+While searching for this info, I noticed that our supported set is close to [Lime1](https://github.com/WebAssembly/tool-conventions/blob/main/Lime.md#lime1). Here are the features we don't support:
+
+- `multivalue`
+- `nontrapping-fptoint`
+- `extended-const`
+
+`extended-const` basically allows more complex expressions in definitions of globals, and I think it's very cheap to support. In fact, it might even simplify code, since I can reuse the generic evaluation mechanism instead of parsing constants by hand. 2926 bytes!
