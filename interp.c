@@ -135,10 +135,7 @@ struct caller_info {
     unsigned long *saved_stack_head;
     unsigned n_results;
     union {
-        struct {
-            unsigned n_params;
-            _Bool skipped_if;
-        };
+        _Bool skipped_if;
         unsigned long *saved_locals;
     };
     // unsigned funcidx;
@@ -188,27 +185,14 @@ DEF(
 ) {}
 
 DEF(block_like, 0x02 /* block */, 0x03 /* loop */, 0x04 /* if */) {
-    unsigned n_params, n_results;
-    if ((*p >> 6) == 1) {
-        n_params = 0;
-        n_results = *p++ != 0x40;
-    } else {
-        unsigned typeidx = read_uint();
-        unsigned char *saved_p = p;
-        p = declared_types[typeidx];
-        n_params = read_uint();
-        p += n_params;
-        n_results = read_uint();
-        p = saved_p;
-    }
-
+    unsigned char blocktype = *p++;
+    unsigned n_results = blocktype != 0x40;
     _Bool skipped_if = break_level == 0 && opcode == 0x04 && !*stack_head++;
     *caller_stack_head++ = (struct caller_info) {
         .opcode = opcode,
         .saved_p = p - 2,
         .saved_stack_head = stack_head,
         .n_results = n_results,
-        .n_params = n_params,
         .skipped_if = skipped_if,
         // .funcidx = -1,
     };
@@ -233,7 +217,7 @@ DEF(end, 0x0b) {
             if (break_level == 0) {
                 if (caller->opcode == 0x03) { // loop
                     p = caller->saved_p;
-                    n_copies = caller->n_params;
+                    n_copies = 0;
                 }
             }
         }
