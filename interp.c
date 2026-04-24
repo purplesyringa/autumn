@@ -1,11 +1,13 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <immintrin.h>
+#include <poll.h>
 #include <stdint.h>
 // #include <stdio.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
+#include <sys/timerfd.h>
 #include <sys/uio.h>
 #include <time.h>
 #include <unistd.h>
@@ -75,6 +77,11 @@ static long syscall2(long sysno, long a, long b) {
 }
 static long syscall3(long sysno, long a, long b, long c) {
     asm volatile ("syscall" : "+a"(sysno) : "D"(a), "S"(b), "d"(c) : "rcx", "r11", "memory");
+    return sysno;
+}
+static long syscall4(long sysno, long a, long b, long c, long d) {
+    register long r10 asm("r10") = d;
+    asm volatile ("syscall" : "+a"(sysno) : "D"(a), "S"(b), "d"(c), "r"(r10) : "rcx", "r11", "memory");
     return sysno;
 }
 
@@ -977,6 +984,114 @@ DEF_IMPORT(fd_fdstat_get) {
     wasi_stat->rights_base = wasi_stat->rights_inheriting = rights;
 
     *stack_head = 0;
+}
+
+DEF_IMPORT(poll_oneoff) {
+    unsigned n_events_ptr = *stack_head++;
+    unsigned n_subscriptions = *stack_head++;
+    unsigned out = *stack_head++;
+    unsigned in = *stack_head;
+
+    *stack_head = 0;
+
+    enum {
+        CLOCK,
+        FD_READ,
+        FD_WRITE,
+    };
+
+    struct subscription {
+        long userdata;
+        unsigned char type;
+        union {
+            struct {
+                int clock_id;
+                unsigned long timeout;
+                unsigned long precision;
+                short flags;
+            } clock;
+            int fd;
+        };
+    };
+
+    struct pollfd fds[n_subscriptions];
+    unsigned n_populated = 0;
+
+    struct subscription *subs = (struct subscription *)(memory + in);
+    struct subscription *sub = subs;
+    struct pollfd *pollfd = fds;
+    for (; n_populated < n_subscriptions; n_populated++, sub++, pollfd++) {
+        pollfd->events = POLLIN;
+        if (sub->type == CLOCK) {
+            if (sub->clock.clock_id >= 4) {
+                *stack_head = 28; // EINVAL
+                goto cleanup;
+            }
+            int fd = syscall2(SYS_timerfd_create, sub->clock.clock_id, 0);
+            if (fd < 0) {
+                *stack_head = 48; // ENOMEM
+                goto cleanup;
+            }
+            int flags = sub->clock.flags & 1 /* SUBSCRIPTION_CLOCK_ABSTIME */ ? TFD_TIMER_ABSTIME : 0;
+            static struct itimerspec spec;
+            spec.it_value.tv_sec = sub->clock.timeout / 1'000'000'000;
+            spec.it_value.tv_nsec = sub->clock.timeout % 1'000'000'000;
+            syscall4(SYS_timerfd_settime, fd, flags, (long)&spec, 0);
+            pollfd->fd = fd;
+        } else if (sub->type == FD_READ || sub->type == FD_WRITE) {
+            pollfd->fd = sub->fd;
+            if (sub->type == FD_WRITE) {
+                pollfd->events = POLLOUT;
+            }
+        } else {
+            *stack_head = 28; // EINVAL
+            goto cleanup;
+        }
+    }
+
+    int native_out;
+    do {
+        native_out = syscall3(SYS_poll, (long)fds, n_subscriptions, -1U);
+    } while (native_out == -EINTR);
+
+    struct event {
+        long userdata;
+        short err;
+        unsigned char type;
+        struct {
+            unsigned long n_bytes;
+            unsigned short flags;
+        } fd_read_write;
+    };
+
+    sub = subs;
+    pollfd = fds;
+    struct event *event = (struct event *)(memory + out);
+    unsigned n_events = 0;
+
+    for (unsigned i = 0; i < n_subscriptions; i++, sub++, pollfd++) {
+        if (!pollfd->revents) {
+            continue;
+        }
+        event->userdata = sub->userdata;
+        event->err = 0;
+        event->type = sub->type;
+        event->fd_read_write.n_bytes = 1;
+        event->fd_read_write.flags = 0;
+        event++;
+        n_events++;
+    }
+
+    *(unsigned*)(memory + n_events_ptr) = n_events;
+
+cleanup:
+    sub = subs;
+    pollfd = fds;
+    for (; n_populated--; sub++, pollfd++) {
+        if (sub->type == CLOCK) {
+            syscall1(SYS_close, pollfd->fd);
+        }
+    }
 }
 
 DEF_IMPORT(clock_time_get) {

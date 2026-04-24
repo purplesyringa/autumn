@@ -2188,3 +2188,43 @@ So opcodes *are* valuable to optimize and I'll probably need to switch to assemb
 Before I do that, I want to clean up code a bit. Since `memory` is now page-aligned, I'm pretty sure I can just assume that all structures in syscalls are aligned, so I can remove `__builtin_memcpy` and other hacks. And if they are actually unaligned, well, we're effectively targeting assembly anyway.
 
 2837 bytes, somehow.
+
+---
+
+`poll_oneoff` is a mess. It doesn't just handle fds -- it also handles timers, and the only lowering I could think of is via `timerfd_create`. This also forces me to handle `EMFILE` and `ENFILE`, which WASI doesn't define, so I'll probably rewrite it to `ENOMEM`.
+
+Does `timerfd_settime` allow `tv_nsec >= 1e9`? [Doesn't look like it](https://elixir.bootlin.com/linux/v7.0.1/source/include/linux/time64.h#L97-L106). Unfortunate.
+
+> nbytes: `u64`
+>
+> The number of bytes available for reading or writing.
+
+Are we for real? *How* am I supposed to get that info out of `poll`? [wasmtime always writes 1](https://github.com/bytecodealliance/wasmtime/blob/599d8211641850c58a7c06eb6b6442b729e5d290/crates/wasi/src/p1.rs#L2544). If it's good enough for them, it's good enough for me.
+
+> `FD_READWRITE_HANGUP`
+>
+> The peer of this socket has closed or disconnected.
+
+I don't have sockets. Does this mean I can just never emit this flag? Surely.
+
+> `error: Errno`
+>
+> If non-zero, an error that occurred while processing the subscription request.
+
+So always zero, I guess. Or I could map `POLLERR` to `EIO`. But zero is probably easier and still works.
+
+IT WORKS!!!
+
+```
+$ ./interp-small quickjs.wasi.wasm
+QuickJS - Type "\h" for help
+qjs > 5 + 8
+5 + 8
+13
+qjs > "hello".slice(2, 3)
+"hello".slice(2, 3)
+"l"
+qjs >
+```
+
+It's slow as fuck and takes 3181 bytes, but it works.
