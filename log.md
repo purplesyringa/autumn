@@ -2182,3 +2182,9 @@ I tried to look at approximately how much compressed space each large part of th
 - Imports: 569 bytes
 
 So opcodes *are* valuable to optimize and I'll probably need to switch to assembly for that. Good to know for future work. For now, I'll need to see how big `poll_oneoff` is.
+
+---
+
+Before I do that, I want to clean up code a bit. Since `memory` is now page-aligned, I'm pretty sure I can just assume that all structures in syscalls are aligned, so I can remove `__builtin_memcpy` and other hacks. And if they are actually unaligned, well, we're effectively targeting assembly anyway.
+
+2837 bytes, somehow.

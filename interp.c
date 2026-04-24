@@ -911,7 +911,7 @@ static void fd_op(int syscallno) {
 
     unsigned long wasi_out = map_to_errno(native_out);
     if (native_out >= 0) {
-        __builtin_memcpy(memory + n_processed, &native_out, 4);
+        *(int*)(memory + n_processed) = native_out;
     }
 
     *stack_head = wasi_out;
@@ -941,12 +941,9 @@ DEF_IMPORT(fd_fdstat_get) {
         return;
     }
 
-    __attribute__((packed))
     struct wasi_stat {
         unsigned char filetype;
-        unsigned char _padding1;
         unsigned short fdflags;
-        unsigned _padding2;
         unsigned long rights_base;
         unsigned long rights_inheriting;
     };
@@ -995,8 +992,7 @@ DEF_IMPORT(clock_time_get) {
 
     static struct timespec tp;
     syscall2(SYS_clock_gettime, clock_id, (long)&tp);
-    unsigned long timestamp = tp.tv_sec * 1000000000UL + tp.tv_nsec;
-    __builtin_memcpy(memory + out_ptr, &timestamp, 8);
+    *(unsigned long*)(memory + out_ptr) = tp.tv_sec * 1000000000UL + tp.tv_nsec;
     *stack_head = 0;
 }
 
@@ -1020,7 +1016,7 @@ static void syslist_impl(char **p, _Bool is_sizes) {
     unsigned pos = is_sizes ? 0 : arg2;
     for (; *p; p++) {
         if (!is_sizes) {
-            __builtin_memcpy(memory + arg1 + ptrs * 4, &pos, 4);
+            ((unsigned*)(memory + arg1))[ptrs] = pos;
         }
         ptrs++;
         unsigned len = strlen(*p);
@@ -1030,8 +1026,8 @@ static void syslist_impl(char **p, _Bool is_sizes) {
         pos += len + 1;
     }
     if (is_sizes) {
-        __builtin_memcpy(memory + arg2, &pos, 4);
-        __builtin_memcpy(memory + arg1, &ptrs, 4);
+        *(unsigned*)(memory + arg2) = pos;
+        *(unsigned*)(memory + arg1) = ptrs;
     }
     *stack_head = 0;
 }
