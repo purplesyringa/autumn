@@ -5,7 +5,6 @@
 #include <stdint.h>
 // #include <stdio.h>
 #include <sys/mman.h>
-#include <sys/stat.h>
 #include <sys/syscall.h>
 #include <sys/timerfd.h>
 #include <sys/uio.h>
@@ -926,7 +925,7 @@ static void fd_op(int syscallno) {
         unsigned buf_len;
     };
     struct wasi_iovec *wasi_iovs = (void*)(memory + iovs);
-    struct iovec native_iovs[iovs_len];
+    static struct iovec native_iovs[1024];
     for (unsigned i = 0; i < iovs_len; i++) {
         native_iovs[i] = (struct iovec){
             .iov_base = memory + wasi_iovs[i].buf,
@@ -960,10 +959,8 @@ DEF_IMPORT(fd_fdstat_get) {
     unsigned buf = *stack_head++;
     unsigned fd = *stack_head;
 
-    static struct stat linux_stat;
-    int out = syscall2(SYS_fstat, fd, (long)&linux_stat);
-    if (out != 0) {
-        *stack_head = map_to_errno(out);
+    if (fd >= 3) {
+        *stack_head = 8; // EBADF;
         return;
     }
 
@@ -974,34 +971,9 @@ DEF_IMPORT(fd_fdstat_get) {
         unsigned long rights_inheriting;
     };
     struct wasi_stat *wasi_stat = (struct wasi_stat *)(memory + buf);
-
-    static unsigned char file_types[16] = {
-        0, 0,
-        2 /* character device */, 0,
-        3 /* directory */, 0,
-        1 /* block device */, 0,
-        4 /* regular file */, 0,
-        7 /* symbolic link */
-    };
-    wasi_stat->filetype = file_types[linux_stat.st_mode >> 12];
-
-    unsigned linux_fdflags = syscall2(SYS_fcntl, fd, F_GETFL);
-    unsigned long dup = linux_fdflags | ((unsigned long)linux_fdflags << 32);
-    unsigned long mask = (
-        // ordered by increasing bit index
-        O_APPEND
-        | O_DSYNC
-        | ((unsigned long)O_NONBLOCK << 32)
-        | ((unsigned long)O_CLOEXEC << 32) // known zero
-        | ((unsigned long)(O_SYNC & ~O_DSYNC) << 32)
-    );
-    unsigned long wasi_fdflags;
-    asm ("pext %2, %1, %0" : "=r"(wasi_fdflags) : "r"(mask), "r"(dup));
-    wasi_stat->fdflags = wasi_fdflags;
-
+    *(int *)wasi_stat = 0; // filetype = fdflags = 0
     unsigned long rights = fd == 0 ? 0x2 /* FD_READ */ : 0x40 /* FD_WRITE */;
     wasi_stat->rights_base = wasi_stat->rights_inheriting = rights;
-
     *stack_head = 0;
 }
 

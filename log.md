@@ -2307,3 +2307,9 @@ Perhaps I can instead try optimizing `poll_oneoff` to the bare minimum. Regardin
 I want to remove the `EINTR` loop. As far as I can tell, it shouldn't trigger if all signal handlers have `SA_RESTART`, which they *probably* do by default? In any case, spurious wakeups are probably fine.
 
 All in all, multiple simplifications to `poll_oneoff` alone brought the size down to 3071 bytes.
+
+---
+
+The next target for simplification is `fd_fdstat_get`. Since I don't support opening files, the only three fds should be stdin, stdout, and stderr. This means that I can always report `filetype` as `0` (unknown) and avoid having to call `stat`. Furthermore, I can drop all flags save for `O_NONBLOCK`; and if I really don't care, I can drop it as well, since I don't allow changing flags anyway. That brings it down to 3005 bytes.
+
+I also optimized `fd_op` by making `native_iovs` a fixed-length `static`, down to 2997 bytes.
