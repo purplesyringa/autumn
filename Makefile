@@ -24,5 +24,5 @@ compressed.bin: interp-small.e8.bin compress/src/main.rs
 	cd compress && cargo run --release
 
 interp-small: decoder.asm compressed.bin
-	nasm $< -o $@ -D output_len=$(shell stat -c %s interp-small.e8.bin) -D initial=$(file <initial.txt)
+	nasm $< -o $@ -D output_len=$(shell stat -c %s interp-small.e8.bin)
 	chmod +x $@

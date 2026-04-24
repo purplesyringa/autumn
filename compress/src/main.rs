@@ -58,7 +58,7 @@ impl Encoder {
         Self {
             bits: vec![],
             left: 0,
-            range: u32::MAX,
+            range: 2,
         }
     }
 
@@ -106,15 +106,12 @@ impl Encoder {
         }
     }
 
-    pub fn finish(mut self) -> (u32, Vec<u8>) {
+    pub fn finish(mut self) -> Vec<u8> {
         self.finalize();
-        let initial = self
-            .bits
-            .drain(..32)
-            .enumerate()
-            .filter(|(_, b)| *b)
-            .map(|(i, _)| 1 << (31 - i))
-            .sum();
+
+        let initial_value_is_zero = self.bits.drain(..32).all(|b| !b);
+        assert!(initial_value_is_zero, "top bit of input is not 1");
+
         self.pad_to_eight();
 
         let (bytes_bits, remainder) = self.bits.as_chunks::<8>();
@@ -134,11 +131,11 @@ impl Encoder {
             );
         }
 
-        (initial, out)
+        out
     }
 }
 
-fn compress_with_models(bytes: &[u8], models: &[u8], size_only: bool) -> (f64, (u32, Vec<u8>)) {
+fn compress_with_models(bytes: &[u8], models: &[u8], size_only: bool) -> (f64, Vec<u8>) {
     let mut encoder = Encoder::new();
     let mut size = 0.;
     let mut stats = ModelCounter::default();
@@ -173,11 +170,7 @@ fn compress_with_models(bytes: &[u8], models: &[u8], size_only: bool) -> (f64, (
         prev_bytes = prev_bytes << 8 | *byte as u64;
     }
 
-    let out = if !size_only {
-        encoder.finish()
-    } else {
-        (0, vec![])
-    };
+    let out = if !size_only { encoder.finish() } else { vec![] };
 
     (size / 8. + n as f64, out)
 }
@@ -224,8 +217,7 @@ fn main() {
     dbg!(model_list.len());
     println!("{model_list:02x?}");
     std::fs::write("../models.bin", model_list).unwrap();
-    let (_, (initial, out)) = compress_with_models(&bytes, &models, false);
+    let (_, out) = compress_with_models(&bytes, &models, false);
     dbg!(out.len());
-    std::fs::write("../initial.txt", format!("{initial}")).unwrap();
     std::fs::write("../compressed.bin", out).unwrap();
 }

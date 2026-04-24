@@ -48,8 +48,7 @@ elf_header_end:
 
 entry:
     mov edi, output_stream - 1
-    dec ebp
-    mov ebx, initial
+    mov bpl, 2
 
 next_byte:
     inc edi
