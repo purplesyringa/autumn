@@ -2333,3 +2333,9 @@ While searching for this info, I noticed that our supported set is close to [Lim
 - `extended-const`
 
 `extended-const` basically allows more complex expressions in definitions of globals, and I think it's very cheap to support. In fact, it might even simplify code, since I can reuse the generic evaluation mechanism instead of parsing constants by hand. 2926 bytes!
+
+---
+
+So I just got a wild idea. When compressing data, we iterate over bits from MSB to LSB, since supposedly that models context better. So BE would supposedly work better than LE, if only we could switch endianness -- which we can't... but what if we reverse the byte array? Sure, that'll prevent the contents from forming a prefix code, but who knows if it'll still work well! I need to try this.
+
+So, first of all: can we confirm that MSB-to-LSB is better than LSB-to-MSB? I tried the latter, and it generated a 3085 byte output file. Makes sense. Now what if we reverse the input? And... 2968 bytes. Unfortunate, but it's still data.
