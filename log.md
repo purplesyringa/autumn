@@ -2228,3 +2228,7 @@ qjs >
 ```
 
 It's slow as fuck and takes 3181 bytes, but it works.
+
+---
+
+Saved two (!) bytes in the decoder with `push`/`pop` -- thanks Yuki.

@@ -34,13 +34,12 @@ elf_header_end:
     ; r10 -- current input bit index
     ;
     ; While decoding bits:
+    ; rdx -- total c1
     ; rsi -- total c0
-    ; r14 -- total c1
     ;
     ; While querying models:
     ; rax -- hash / counters
-    ; rcx -- model count
-    ; rdx -- 8-bit mask / c1
+    ; rcx -- model count / 8-bit mask / c1
     ;
     ; Teaching models:
     ; rcx -- model counter
@@ -64,21 +63,23 @@ write_bit:
 
     push 1
     pop rsi ; c0
-    mov r14d, esi ; c1
+    mov edx, esi ; c1
 
     mov cl, models_end - models
 
 query_model:
+    push rcx
+
     ; Load 8-bit mask
-    mov dl, byte [rcx + models - 1]
+    mov cl, byte [rcx + models - 1]
 
     ; Compute hash
     xor eax, eax
-    crc32 eax, dl
+    crc32 eax, cl
     sub edi, 8
 hash:
     inc edi
-    shl dl, 1
+    shl cl, 1
     jnc skip_byte
     crc32 eax, byte [rdi]
 skip_byte:
@@ -88,23 +89,25 @@ skip_byte:
     and eax, 32 * 1024 * 1024 - 2
     add eax, hash_table
 
+    ; Accumulate c0/c1
+    movzx ecx, byte [rax + 1]
+    add edx, ecx
+    movzx ecx, byte [rax]
+    add esi, ecx
+
+    pop rcx
+
     ; Save address for later adjustment
     push rax
-
-    ; Accumulate c0/c1
-    movzx edx, byte [rax + 1]
-    movzx eax, byte [rax]
-    add esi, eax
-    add r14d, edx
 
     loop query_model
 
     ; We now know c0 and c1 
-    add esi, r14d ; c0 += c1
+    add esi, edx ; c0 += c1
 
     ; mid = range * c1 / (c0 + c1)
     mov eax, ebp
-    mul r14d
+    mul edx
     div esi
 
     cmp ebx, eax
