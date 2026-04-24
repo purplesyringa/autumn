@@ -2278,3 +2278,14 @@ The Wasm 2.0 spec says:
 Worth noting that this process needs to be done even when returning from a function, which I don't currently do -- so maybe if I fix that, supporting multivalues will be reasonably cheap anyway.
 
 That's 3204 bytes, i.e. +46 bytes. I don't know how I feel about this... I'll commit it for now, but I'll probably have to remove it later.
+
+---
+
+So, I suppose that didn't help me debug the `setTimeout` issue. Welp. That's unfortunate, because I don't see anything obviously wrong in `$pselect`, where I'm assuming the call to `poll_oneoff` originates from.
+
+Okay, so I finally figured it out. The QuickJS binary I'm using targets `wasi_unstable`, aka `wasip0`, not `wasip1`. I haven't encountered any difference between the two yet, or so I thought: the layout of the `subscription` struct differs between `wasip0` and `wasip1`! Specifically, in `wasip0`, there are *two* `userdata` fields -- one in the subscription itself, and one in its `clock` variant. Compare:
+
+https://github.com/WebAssembly/WASI/blob/wasi-0.1/preview0/witx/typenames.witx#L545-L560
+https://github.com/WebAssembly/WASI/blob/wasi-0.1/preview1/witx/typenames.witx#L560-L573
+
+As far as I can tell, the second `userdata` field is never used. https://github.com/WebAssembly/WASI/pull/125 says it's a historic artifact. Adding that field fixed `setTimeout`. I also added a hack to make `poll` work correctly when invoked with a zero timeout. 3205 bytes.

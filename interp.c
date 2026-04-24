@@ -1029,6 +1029,7 @@ DEF_IMPORT(poll_oneoff) {
         unsigned char type;
         union {
             struct {
+                long userdata2;
                 int clock_id;
                 unsigned long timeout;
                 unsigned long precision;
@@ -1059,7 +1060,7 @@ DEF_IMPORT(poll_oneoff) {
             int flags = sub->clock.flags & 1 /* SUBSCRIPTION_CLOCK_ABSTIME */ ? TFD_TIMER_ABSTIME : 0;
             static struct itimerspec spec;
             spec.it_value.tv_sec = sub->clock.timeout / 1'000'000'000;
-            spec.it_value.tv_nsec = sub->clock.timeout % 1'000'000'000;
+            spec.it_value.tv_nsec = (sub->clock.timeout % 1'000'000'000) | 1; // ensure non-zero value
             syscall4(SYS_timerfd_settime, fd, flags, (long)&spec, 0);
             pollfd->fd = fd;
         } else if (sub->type == FD_READ || sub->type == FD_WRITE) {
