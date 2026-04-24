@@ -79,11 +79,6 @@ static long syscall3(long sysno, long a, long b, long c) {
     asm volatile ("syscall" : "+a"(sysno) : "D"(a), "S"(b), "d"(c) : "rcx", "r11", "memory");
     return sysno;
 }
-static long syscall4(long sysno, long a, long b, long c, long d) {
-    register long r10 asm("r10") = d;
-    asm volatile ("syscall" : "+a"(sysno) : "D"(a), "S"(b), "d"(c), "r"(r10) : "rcx", "r11", "memory");
-    return sysno;
-}
 
 struct read_int_output {
     unsigned long value;
@@ -1038,45 +1033,39 @@ DEF_IMPORT(poll_oneoff) {
         };
     };
 
-    struct pollfd fds[n_subscriptions];
-    unsigned n_populated = 0;
+    static struct pollfd fds[1024];
+    unsigned timeout = -1;
 
     struct subscription *subs = (struct subscription *)(memory + in);
     struct subscription *sub = subs;
     struct pollfd *pollfd = fds;
-    for (; n_populated < n_subscriptions; n_populated++, sub++, pollfd++) {
+    for (unsigned i = 0; i < n_subscriptions; i++, sub++, pollfd++) {
         pollfd->events = POLLIN;
-        if (sub->type == CLOCK) {
-            if (sub->clock.clock_id >= 4) {
+        switch (sub->type) {
+        case CLOCK:
+            if (sub->clock.clock_id >= 4 || sub->clock.flags != 0) {
                 *stack_head = 28; // EINVAL
-                goto cleanup;
+                return;
             }
-            int fd = syscall2(SYS_timerfd_create, sub->clock.clock_id, 0);
-            if (fd < 0) {
-                *stack_head = 48; // ENOMEM
-                goto cleanup;
+            unsigned this_timeout = sub->clock.timeout / 1'000'000;
+            if (this_timeout < timeout) {
+                timeout = this_timeout;
             }
-            int flags = sub->clock.flags & 1 /* SUBSCRIPTION_CLOCK_ABSTIME */ ? TFD_TIMER_ABSTIME : 0;
-            static struct itimerspec spec;
-            spec.it_value.tv_sec = sub->clock.timeout / 1'000'000'000;
-            spec.it_value.tv_nsec = (sub->clock.timeout % 1'000'000'000) | 1; // ensure non-zero value
-            syscall4(SYS_timerfd_settime, fd, flags, (long)&spec, 0);
-            pollfd->fd = fd;
-        } else if (sub->type == FD_READ || sub->type == FD_WRITE) {
+            pollfd->fd = -1;
+            break;
+        case FD_WRITE:
+            pollfd->events = POLLOUT;
+            // fallthrough
+        case FD_READ:
             pollfd->fd = sub->fd;
-            if (sub->type == FD_WRITE) {
-                pollfd->events = POLLOUT;
-            }
-        } else {
+            break;
+        default:
             *stack_head = 28; // EINVAL
-            goto cleanup;
+            return;
         }
     }
 
-    int native_out;
-    do {
-        native_out = syscall3(SYS_poll, (long)fds, n_subscriptions, -1U);
-    } while (native_out == -EINTR);
+    syscall3(SYS_poll, (long)fds, n_subscriptions, timeout);
 
     struct event {
         long userdata;
@@ -1107,15 +1096,6 @@ DEF_IMPORT(poll_oneoff) {
     }
 
     *(unsigned*)(memory + n_events_ptr) = n_events;
-
-cleanup:
-    sub = subs;
-    pollfd = fds;
-    for (; n_populated--; sub++, pollfd++) {
-        if (sub->type == CLOCK) {
-            syscall1(SYS_close, pollfd->fd);
-        }
-    }
 }
 
 DEF_IMPORT(clock_time_get) {

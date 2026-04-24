@@ -2295,3 +2295,15 @@ As far as I can tell, the second `userdata` field is never used. https://github.
 The glaring issue, of course, is that adding this fix breaks `wasip1` programs. The right thing to do is recompile QuickJS for `wasip1` and only support `wasip1`. So... how do I do that?
 
 I looked at how [go-quickjs-wasi](https://github.com/paralin/go-quickjs-wasi) does this, and it seems like quickjs-ng publishes WASI apps in [releases](https://github.com/quickjs-ng/quickjs/releases). Unfortunately, it looks like it crashes when executing `fc 02` -- saturating floating-point conversion. Must be due to https://github.com/quickjs-ng/quickjs/pull/1283. For now, I can use an older version.
+
+---
+
+I'm 252 bytes above the limit. I need to drop features. Let's try dropping everything that's not part of Wasm 1.0.
+
+I can cut 110 bytes by dropping multivalues, `inn.extend*_s`, and `memory.copy`/`memory.fill`. But that's clearly not enough. I can drop `proc_raise`, but it's tiny. QuickJS technically also doesn't need `random_get`, but the guessing game does, so I'd rather keep it. Either way, it's still not enough.
+
+Perhaps I can instead try optimizing `poll_oneoff` to the bare minimum. Regarding timeouts: if I only handle I don't handle `TFD_TIMER_ABSTIME`, I can directly translate the timeout to the argument to `poll`. This covers the `poll` implementation in wasi-libc, so it should be enough.
+
+I want to remove the `EINTR` loop. As far as I can tell, it shouldn't trigger if all signal handlers have `SA_RESTART`, which they *probably* do by default? In any case, spurious wakeups are probably fine.
+
+All in all, multiple simplifications to `poll_oneoff` alone brought the size down to 3071 bytes.
