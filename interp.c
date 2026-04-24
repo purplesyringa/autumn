@@ -62,10 +62,6 @@ static size_t strlen(const char *s) {
     return -2 - count;
 }
 
-static long syscall0(long sysno) {
-    asm volatile ("syscall" : "+a"(sysno) :: "rcx", "r11", "memory");
-    return sysno;
-}
 static long syscall1(long sysno, long a) {
     asm volatile ("syscall" : "+a"(sysno) : "D"(a) : "rcx", "r11", "memory");
     return sysno;
@@ -1114,9 +1110,6 @@ DEF_IMPORT(args_sizes_get) { syslist_impl(args, 1); }
 DEF_IMPORT(proc_exit) {
     syscall1(SYS_exit, *stack_head);
     __builtin_trap();
-}
-DEF_IMPORT(proc_raise) {
-    *stack_head = map_to_errno(syscall2(SYS_kill, syscall0(SYS_getpid), *stack_head));
 }
 
 int main(int argc, char **argv, char **envp) {

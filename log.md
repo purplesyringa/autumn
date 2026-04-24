@@ -2317,3 +2317,7 @@ I also optimized `fd_op` by making `native_iovs` a fixed-length `static`, down t
 ---
 
 I've cut multivalues, but not other features. 2958 bytes, it almost fits.
+
+---
+
+Had to drop `proc_raise`, I have no idea how else to improve the size, save for rewriting in assembly, the effect of which I can't estimate. 2943 bytes, I think this will have to do for now.
