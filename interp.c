@@ -154,8 +154,12 @@ register unsigned break_level asm ("r14");
 
 static void call_func(unsigned funcidx);
 
+#ifdef __SANITIZE_ADDRESS__
+#define PARSED if (break_level) return
+#else
 // Technically unsound, but oh well. I couldn't find a better way to make GCC inline the prologue.
 #define PARSED if (break_level) { asm volatile ("ret"); __builtin_unreachable(); }
+#endif
 
 #define DEF(name, ...) \
     __attribute__((section(".text"))) /* don't put op_unknown in .text.unlikely for relocations */ \
