@@ -1029,7 +1029,6 @@ DEF_IMPORT(poll_oneoff) {
         unsigned char type;
         union {
             struct {
-                long userdata2;
                 int clock_id;
                 unsigned long timeout;
                 unsigned long precision;

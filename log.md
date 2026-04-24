@@ -2289,3 +2289,9 @@ https://github.com/WebAssembly/WASI/blob/wasi-0.1/preview0/witx/typenames.witx#L
 https://github.com/WebAssembly/WASI/blob/wasi-0.1/preview1/witx/typenames.witx#L560-L573
 
 As far as I can tell, the second `userdata` field is never used. https://github.com/WebAssembly/WASI/pull/125 says it's a historic artifact. Adding that field fixed `setTimeout`. I also added a hack to make `poll` work correctly when invoked with a zero timeout. 3205 bytes.
+
+---
+
+The glaring issue, of course, is that adding this fix breaks `wasip1` programs. The right thing to do is recompile QuickJS for `wasip1` and only support `wasip1`. So... how do I do that?
+
+I looked at how [go-quickjs-wasi](https://github.com/paralin/go-quickjs-wasi) does this, and it seems like quickjs-ng publishes WASI apps in [releases](https://github.com/quickjs-ng/quickjs/releases). Unfortunately, it looks like it crashes when executing `fc 02` -- saturating floating-point conversion. Must be due to https://github.com/quickjs-ng/quickjs/pull/1283. For now, I can use an older version.
