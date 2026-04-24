@@ -31,16 +31,16 @@ static void *memmove(void *dst, const void *src, size_t n) {
     asm volatile (
         "cmp %0, %1;"
         "jb 1f;" // src < dst
-        "add %k2, %k0;"
-        "dec %k0;"
-        "add %k2, %k1;"
-        "dec %k1;"
+        "add %2, %0;"
+        "dec %0;"
+        "add %2, %1;"
+        "dec %1;"
         "std;"
         "1: rep movsb;"
         "cld"
         : "+D"(dst), "+S"(src), "+c"(n)
         :
-        : "memory"
+        : "memory", "flags"
     );
     return tmp;
 }

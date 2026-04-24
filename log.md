@@ -2353,3 +2353,7 @@ do {
 This looks *very* simple -- simpler than the current logic of handling `end`. I switched from recursion to `caller_stack` in hopes that using the native stack for data might be more optimal, but it *feels* like the entropy from using `r15` is lower than implementing blocks in a non-recursive manner, so with compression, it's better to use stack for recursion.
 
 So I implemented it and got 2886 bytes, a 82 byte reduction -- probably because it removed lots of memory accesses to `caller_stack`. It feels worthwhile, but I don't know if optimizing the stack for data might still be better... Surely not? I just don't want to commit to this because it's really brittle -- adding calls to opcode implementations made GCC introduce `push`/`pop`s in `op_call` unnecessarily, and while I could workaround it, it's certainly not a 100% reliable option. But it'll have to do.
+
+---
+
+So I realized that with 4 GiB of memory, treating addresses as 32-bit in `memmove` is incorrect. This also fixed the ASAN build, which uses ASLR and thus suffers from the same issue. 2884 bytes, somehow?
