@@ -2240,3 +2240,41 @@ Moved the `initial` constant to the data section by setting the initial range to
 ---
 
 Inlined the first few instructions of decoder into the ELF header. There's still about 12 unused bytes left, but they're spread as 8 + 4, so it's not clear what to put there. 3158 bytes.
+
+---
+
+I think something is wrong with the QuickJS build. I tried `setTimeout`, and it doesn't trigger until the next non-timer event is delivered. It seems like I initialize the timer to a zero timeout, but only because `poll_oneoff` itself is invoked that way. Maybe there was an ABI change? It works under `wasmtime` though... but I can *clearly* see `poll_oneoff` is invoked with zeros for timeout. I don't get it. Do I have a bug somewhere else?
+
+Tried running tests. Looks like, for some reason, parsing element sections hangs in files with more than one table? How can that happen?
+
+Oh, I get it, it's Wasm 2.0 again. They changed the format of the element section, and I misparse it. Probably WONTFIX. That doesn't explain all failures, though.
+
+`ref_func.wasm` also gets stuck during parsing, but seemingly for a different reason. Oh, I see, that's because it has a `ref.func` global. This leaves runtime failures in:
+
+- `block.wasm` -- fails in `break-multi-value`, that's expected.
+- `br.wasm` -- fails in `type-f64-f64-value`, same situation.
+- `conversions.wasm` -- fails in `i32.trunc_sat_f32_s`, that's deliberately unimplemented.
+- `fac.wasm` -- messy `fac-ssa`, not sure what's going on here.
+- `func.wasm` -- fails in `break-i32-f64`, that's multivalues.
+- `if.wasm` -- fails in `multi`, same situation.
+- `loop.wasm` -- fails in `break-multi-value`, same situation.
+
+So most of it is multivalues. That's not very useful for testing... but I *guess* I could check how expensive multivalues are to implement? 3158 -> 3176, and all those tests (Except `conversions.wasm`) now pass. That's a 18 byte increase. *Maybe* worth it? Though I am worried about why `params`-related tests pass, since I just assume the number of parameters is zero.
+
+```wasm
+(func (export "params") (result i32)
+  (i32.const 1)
+  (i32.const 2)
+  (block (param i32 i32) (result i32)
+    (i32.add)
+  )
+)
+```
+
+The Wasm 2.0 spec says:
+
+> Taking a branch unwinds the operand stack up to the height where the targeted structured control instruction was entered. However, branches may additionally consume operands themselves, which they push back on the operand stack after unwinding. Forward branches require operands according to the output of the targeted block’s type, i.e., represent the values produced by the terminated block. Backward branches require operands according to the input of the targeted block’s type, i.e., represent the values consumed by the restarted block.
+
+Worth noting that this process needs to be done even when returning from a function, which I don't currently do -- so maybe if I fix that, supporting multivalues will be reasonably cheap anyway.
+
+That's 3204 bytes, i.e. +46 bytes. I don't know how I feel about this... I'll commit it for now, but I'll probably have to remove it later.

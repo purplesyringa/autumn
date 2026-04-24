@@ -139,9 +139,10 @@ struct caller_info {
     unsigned char opcode;
     unsigned char *saved_p;
     unsigned long *saved_stack_head;
+    unsigned n_results;
     union {
         struct {
-            _Bool has_result;
+            unsigned n_params;
             _Bool skipped_if;
         };
         unsigned long *saved_locals;
@@ -193,13 +194,27 @@ DEF(
 ) {}
 
 DEF(block_like, 0x02 /* block */, 0x03 /* loop */, 0x04 /* if */) {
-    unsigned char blocktype = *p++;
+    unsigned n_params, n_results;
+    if ((*p >> 6) == 1) {
+        n_params = 0;
+        n_results = *p++ != 0x40;
+    } else {
+        unsigned typeidx = read_uint();
+        unsigned char *saved_p = p;
+        p = declared_types[typeidx];
+        n_params = read_uint();
+        p += n_params;
+        n_results = read_uint();
+        p = saved_p;
+    }
+
     _Bool skipped_if = break_level == 0 && opcode == 0x04 && !*stack_head++;
     *caller_stack_head++ = (struct caller_info) {
         .opcode = opcode,
         .saved_p = p - 2,
         .saved_stack_head = stack_head,
-        .has_result = blocktype != 0x40,
+        .n_results = n_results,
+        .n_params = n_params,
         .skipped_if = skipped_if,
         // .funcidx = -1,
     };
@@ -213,6 +228,7 @@ DEF(else, 0x05) {
 
 DEF(end, 0x0b) {
     struct caller_info *caller = --caller_stack_head;
+    unsigned n_copies = caller->n_results;
     if (caller->opcode == 0x10 /* call */) {
         break_level = 0;
         locals = caller->saved_locals;
@@ -223,17 +239,17 @@ DEF(end, 0x0b) {
             if (break_level == 0) {
                 if (caller->opcode == 0x03) { // loop
                     p = caller->saved_p;
-                } else { // block or if
-                    if (caller->has_result) {
-                        unsigned long value = *stack_head++;
-                        stack_head = caller->saved_stack_head;
-                        push(value);
-                    } else {
-                        stack_head = caller->saved_stack_head;
-                    }
+                    n_copies = caller->n_params;
                 }
             }
         }
+    }
+
+    if (break_level == 0) {
+        unsigned long *new_stack_head = caller->saved_stack_head - n_copies;
+        // This copy can overlap, but our `memcpy` copies data in the right direction.
+        memcpy(new_stack_head, stack_head, n_copies * sizeof(*stack_head));
+        stack_head = new_stack_head;
     }
 }
 
@@ -850,6 +866,8 @@ static void call_func(unsigned funcidx) {
     unsigned char *body_p = p;
     p = declared_types[info->typeidx];
     unsigned n_args = read_uint();
+    p += n_args;
+    unsigned n_results = read_uint();
 
     unsigned long *saved_locals = locals;
     locals -= n_args + n_locals;
@@ -864,6 +882,8 @@ static void call_func(unsigned funcidx) {
     *caller_stack_head++ = (struct caller_info) {
         .opcode = 0x10 /* call */,
         .saved_p = saved_p,
+        .saved_stack_head = stack_head,
+        .n_results = n_results,
         .saved_locals = saved_locals,
         // .funcidx = funcidx,
     };
