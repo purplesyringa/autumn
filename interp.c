@@ -175,8 +175,20 @@ DEF(
 DEF(block_like, 0x02 /* block */, 0x03 /* loop */, 0x04 /* if */) {
     unsigned char *saved_p = p - 1;
 
-    unsigned char blocktype = *p++;
-    unsigned n_results = blocktype != 0x40;
+    unsigned n_params, n_results;
+    if ((*p >> 6) == 1) { // type indicator
+        n_params = 0;
+        n_results = *p++ != 0x40; // epsilon blocktype
+    } else { // s32
+        unsigned typeidx = read_uint();
+        unsigned char *saved_p = p;
+        p = declared_types[typeidx];
+        n_params = read_uint();
+        p += n_params;
+        n_results = read_uint();
+        p = saved_p;
+    }
+
     _Bool skipped_if = break_level == 0 && opcode == 0x04 && !*stack_head++;
 
     unsigned long *saved_stack_head = stack_head;
@@ -197,7 +209,7 @@ DEF(block_like, 0x02 /* block */, 0x03 /* loop */, 0x04 /* if */) {
         break_level--;
         if (break_level == 0 && opcode == 0x03) { // loop
             p = saved_p;
-            n_results = 0;
+            n_results = n_params;
         }
     }
 

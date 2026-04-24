@@ -2357,3 +2357,7 @@ So I implemented it and got 2886 bytes, a 82 byte reduction -- probably because 
 ---
 
 So I realized that with 4 GiB of memory, treating addresses as 32-bit in `memmove` is incorrect. This also fixed the ASAN build, which uses ASLR and thus suffers from the same issue. 2884 bytes, somehow?
+
+---
+
+I have 69 free bytes -- I can probably fit `multivalue` in there. 2934 bytes, 19 bytes left.
