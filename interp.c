@@ -774,19 +774,27 @@ DEF(
         x = (long)(int)x;
     }
 
-    double out;
-    asm ("cvtsi2sd %1, %0;" : "=x"(out) : "r"(x));
+    unsigned char size_byte = 0xf2 + (opcode < 0xb7); // f32
+
+    unsigned long out;
+    asm (
+        "mov %2, 1f(%%rip);"
+        "1: cvtsi2sd %1, %0"
+        : "=x"(out)
+        : "r"(x), "r"(size_byte)
+    );
     if (arg == 2 && (long)x < 0) { // fnn.convert_i64_u
         x = (x >> 1) | (x & 1);
-        asm ("cvtsi2sd %1, %0;" : "=x"(out) : "r"(x));
-        out += out;
+        asm (
+            "mov %2, 1f(%%rip);"
+            "mov %2, 2f(%%rip);"
+            "1: cvtsi2sd %1, %0;"
+            "2: addsd %0, %0"
+            : "=&x"(out)
+            : "r"(x), "r"(size_byte)
+        );
     }
 
-    if (opcode < 0xb7) { // f32
-        float f = out;
-        out = 0;
-        __builtin_memcpy(&out, &f, 4);
-    }
     __builtin_memcpy(stack_head, &out, 8);
 }
 

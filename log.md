@@ -2405,3 +2405,5 @@ Looks like `(float)(double)n` is not equivalent to `(float)n` due to double roun
 > Is it possible for `(float)i` to return +inf, but for `(float)(double)i` to return a finite number? `(float)i` is +inf if `i` is close to `f32`'s limit, i.e. at least halfway between the maximum finite value and +inf. `(double)i` should round this to a power of two that `(float)` will then interpret as the limit and return +inf. And LLVM seems to agree that `(float)(double)i == (float)i` as well. That's good enough for me.
 
 The worry about `+inf` was misguided, the issue is rounding for finite numbers. Why did I say LLVM agree? Probably because I ran the test on `int`, for which the cast to `double` introduces no rounding -- but now I tried it on `long` and it uses different code for the two options. Seems like I'll have to adjust the implementation.
+
+Fixed this by patching instructions between `sd` and `ss` variants for now. The conversion test now passes. I'm at 3029 bytes.
