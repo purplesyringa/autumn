@@ -693,40 +693,64 @@ DEF(copysign, 0x98 = 33 /* f32.copysign */, 0xa6 = 1 /* f64.copysign */) {
 
 DEF(
     float_to_int, 
-    0xa8 = 0b11, // i32.trunc_f32_s
-    0xa9 = 0b11, // i32.trunc_f32_u
-    0xaa = 0b10, // i32.trunc_f64_s
-    0xab = 0b10, // i32.trunc_f64_u
-    0xae = 0b01, // i64.trunc_f32_s
-    0xaf = 0b01, // i64.trunc_f32_u
-    0xb0 = 0b00, // i64.trunc_f64_s
-    0xb1 = 0b00, // i64.trunc_f64_u
+    // The `arg` is the corresponding `0xfc`-prefixed `inn.trunc_sat_fnn_[su]` opcode, so that this
+    // function can be reused for both.
+    0xa8 = 0, // i32.trunc_f32_s
+    0xa9 = 1, // i32.trunc_f32_u
+    0xaa = 2, // i32.trunc_f64_s
+    0xab = 3, // i32.trunc_f64_u
+    0xae = 4, // i64.trunc_f32_s
+    0xaf = 5, // i64.trunc_f32_u
+    0xb0 = 6, // i64.trunc_f64_s
+    0xb1 = 7, // i64.trunc_f64_u
 ) {
     PARSED;
 
     double x;
     asm ("movq %1, %0" : "=x"(x) : "m"(*stack_head));
-    if (arg & 1) { // f32
+    if (!(arg & 2)) { // f32
         float f;
         __builtin_memcpy(&f, &x, 4);
         x = f;
     }
 
-    unsigned long out;
-    asm ("cvttsd2si %1, %0;" : "=r"(out) : "x"(x));
+    unsigned long out = 0;
+    asm volatile ("" : "+r"(out)); // witness zero so that the conditional jump compiles better
 
-    if (opcode & 1) { // inn.trunc_f64_u
-        if ((long)out < 0) {
-            unsigned long value;
-            __builtin_memcpy(&value, &x, 8);
-            out = (value << 11) | (1UL << 63);
-        }
-    } else {
-        if (arg & 2) { // i32
-            out = (unsigned)out;
-        }
+    unsigned bitness = 31 + (arg & 1) + 32 * ((arg & 4) != 0);
+
+    asm goto (
+        "ucomisd %1, %0;"
+        "jp %l2;"
+        "jb %l3;"
+        :
+        : "x"(x), "x"((1023UL + bitness) << 52 /* pow2(bitness) */)
+        : "flags"
+        : done, below_limit
+    );
+
+    // above limit
+    out--; // generate -1
+    out >>= (64 - bitness) % 64;
+    goto done;
+
+below_limit:
+    if (arg & 1) { // unn
+        asm ("maxsd %1, %0" : "+x"(x) : "x"(0));
     }
 
+    asm ("cvttsd2si %1, %0;" : "=r"(out) : "x"(x));
+    if (arg == 0 || arg == 2) { // i32.trunc_fnn_s
+        asm ("cvttsd2si %1, %k0;" : "=r"(out) : "x"(x));
+    }
+
+    if ((arg & 1) && (long)out < 0) { // inn.trunc_f64_u
+        unsigned long value;
+        __builtin_memcpy(&value, &x, 8);
+        out = (value << 11) | (1UL << 63);
+    }
+
+done:
     *stack_head = out;
 }
 
@@ -768,6 +792,10 @@ DEF(
 
 DEF(fc_prefix, 0xfc) {
     opcode = *p++;
+    if (opcode < 8) { // inn.trunc_sat_fnn_[su]
+        op_float_to_int(0, opcode);
+        return;
+    }
     switch (opcode) {
     case 0x0a: // memory.copy
     {

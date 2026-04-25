@@ -2361,3 +2361,31 @@ So I realized that with 4 GiB of memory, treating addresses as 32-bit in `memmov
 ---
 
 I have 69 free bytes -- I can probably fit `multivalue` in there. 2934 bytes, 19 bytes left.
+
+---
+
+Can I fit saturating conversions in there as well? :) How hard could it be? :)
+
+Rust's `as` conversion has the right semantics -- how is it lowered?
+
+Right. So, when converting `f64` to `u32`, Rust calculates `min(max(x, 0), max_value)`, which clamps x to range `[0; max_value]`, and then applies the normal `cvttsd2si` conversion. Importantly, this uses the x86 semantics for `max`, where `max(NaN, x) = x`, so `NaN` is automatically translated to `0`. This basically just introduces `min`/`max` to the pipeline and is cheap overall.
+
+When converting `f64` to `i32`, Rust also uses `max`/`min`, but since it doesn't give the right result on `NaN`, it also adds `ucomisd` + `cmovnp` to zero out the output if the input is `NaN`.
+
+The confusing to me part is the `f64`-to-`i64` conversion, for which it adds a manual `if (a >= max_value)` test, but doesn't handle the minimal bound at all... Wait, I get it: the x86 value for an error is `0x80...00`, which is exactly the minimal bound! And that leaves only the top boundary to handle.
+
+For me, I think the right thing to do is:
+
+1. `ucomisd` immediately to check if the input is `NaN`, since we're going to need it for some conversions, so might as well get it out of the way unconditionally.
+2. For unsigned operations, use `minsd` to set the lower boundary to `0`.
+3. Use `minsd` to set the upper boundary to `2^31 - 1`, `2^32 - 1`, `2^63 - 1`, or `2^64 - 1`, depending on the target type.
+4. Convert to `s32` if the target type is `s32`, or to `s64` otherwise.
+5. If the target type is `u64`, extract bits manually.
+
+*Except* I'm now realizing that this doesn't actually work! Since a `double`'s mantissa is 53 bits, casting a large float to a 64-bit integer usually leaves the 11 lowest bits zero, but saturation should produce `0xff...ff`, so `sat_cast(+inf) != cast(min(+inf, high_limit))`. And this explains why Rust generates such different code for `f64`-to-`i64` (manual bounds check) and `f64`-to-`i32` (`minpd`). Notably, this is only necessary for casting to `i64`, not `i32`, but I'll most likely have to use the same approach for better compression.
+
+Out-of-bounds checks are oddly complex. For 64-bit numbers, I just compare `x >= 0x1p63` or `x >= 0x1p64` depending on whether the number is signed. With a 53-bit mantissa, anything below `0x1p64` is guaranteed to fit in a 64-bit unsigned value and produce the right result. Not so much with 32-bit numbers, seemingly: `x >= 0x1p32` ignores the fact that the `double` slightly below `0x1p32` is closer to `2^32` than `2^32 - 1`, so it should round to the former. But *for whatever reason*, that's not what `cvttsd2si` does -- it outputs `2^32 - 1`. Wait, no, I'm stupid: `cvttsd2si` is *truncating* conversion, of course it truncates to `2^32 - 1`.
+
+Hard-coding constants seems to be expensive, but we can generate them.
+
+3009 bytes. This makes the most recent version of QuickJS work. It's not *too* expensive, but I will have to optimize something. That sounds like Lime1 implemented.
