@@ -2389,3 +2389,19 @@ Out-of-bounds checks are oddly complex. For 64-bit numbers, I just compare `x >=
 Hard-coding constants seems to be expensive, but we can generate them.
 
 3009 bytes. This makes the most recent version of QuickJS work. It's not *too* expensive, but I will have to optimize something. That sounds like Lime1 implemented.
+
+---
+
+This uncovered a test failure in other conversion functions:
+
+```
+(assert_return (invoke "f32.convert_i64_s" (i64.const 0x7fffff4000000001)) (f32.const 0x1.fffffep+62))
+```
+
+Looks like `(float)(double)n` is not equivalent to `(float)n` due to double rounding. Makes sense. Why did I think the two are equivalent?
+
+> Is it safe to implement `(float)i` as `(float)(double)i`? It *looks* safe, but I'm worried about edge cases.
+>
+> Is it possible for `(float)i` to return +inf, but for `(float)(double)i` to return a finite number? `(float)i` is +inf if `i` is close to `f32`'s limit, i.e. at least halfway between the maximum finite value and +inf. `(double)i` should round this to a power of two that `(float)` will then interpret as the limit and return +inf. And LLVM seems to agree that `(float)(double)i == (float)i` as well. That's good enough for me.
+
+The worry about `+inf` was misguided, the issue is rounding for finite numbers. Why did I say LLVM agree? Probably because I ran the test on `int`, for which the cast to `double` introduces no rounding -- but now I tried it on `long` and it uses different code for the two options. Seems like I'll have to adjust the implementation.
