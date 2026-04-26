@@ -2494,3 +2494,7 @@ Okay, let's touch up on syscalls. We support many `errno`s currently, but they'r
 - `EDQUOT`, `EFBIG`, and `ENOSPC` all fall under PEBCAK.
 
 This leaves `EBADF`, `EIO`, and `EPIPE`. 2937 bytes after a ton of inlining and hard-coding. Fun how I saved a total of, like, 20 bytes from all the previous optimizations, and now about 50 almost for free.
+
+---
+
+`fd_op` is a little bit larger than optimal due to the `iovec` conversion. GCC generates manual reads and writes with inlined addresses, but I think I can slightly improve it by combining `lodsl` and `stosq`. That saved surprisingly much space! 2918 bytes.

@@ -862,20 +862,27 @@ static void fd_op(int syscallno) {
         unsigned buf;
         unsigned buf_len;
     };
-    struct wasi_iovec *wasi_iovs = (void*)(memory + iovs);
     static struct iovec native_iovs[1024];
+
+    struct wasi_iovec *src = (void*)(memory + iovs);
+    struct iovec *dst = native_iovs;
     for (unsigned i = 0; i < iovs_len; i++) {
-        native_iovs[i] = (struct iovec){
-            .iov_base = memory + wasi_iovs[i].buf,
-            .iov_len = wasi_iovs[i].buf_len,
-        };
+        asm volatile (
+            "lodsl;" // buf
+            "add %[memory], %%eax;"
+            "stosq;"
+            "lodsl;" // buf_len
+            "stosq"
+            : "+S"(src), "+D"(dst)
+            : [memory]"i"(memory)
+            : "rax", "memory"
+        );
     }
+
     ssize_t native_out = syscall3(syscallno, fd, (long)native_iovs, iovs_len);
 
     unsigned wasi_out = 0;
-    if (native_out >= 0) {
-        *(int*)(memory + n_processed) = native_out;
-    } else {
+    if (native_out < 0) {
         switch ((short)native_out) {
         case -EBADF: wasi_out = 8; break;
         case -EIO: wasi_out = 29; break; 
@@ -883,6 +890,8 @@ static void fd_op(int syscallno) {
         default: wasi_out = 28; // EINVAL
         }
     }
+
+    *(int*)(memory + n_processed) = native_out;
     *stack_head = wasi_out;
 }
 
