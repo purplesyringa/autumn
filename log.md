@@ -2498,3 +2498,7 @@ This leaves `EBADF`, `EIO`, and `EPIPE`. 2937 bytes after a ton of inlining and 
 ---
 
 `fd_op` is a little bit larger than optimal due to the `iovec` conversion. GCC generates manual reads and writes with inlined addresses, but I think I can slightly improve it by combining `lodsl` and `stosq`. That saved surprisingly much space! 2918 bytes.
+
+---
+
+The same optimization should be applicable to mapping results in `poll_oneoff`. But somehow I'm only at 2917 bytes. Huh. What's the reason for such a large difference in effect? Not sure -- probably because GCC didn't hard-code addresses this time. I'm rolling back the optimization, it complicated code for no good reason. `poll_oneoff` will have to stay as-is.
