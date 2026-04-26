@@ -37,7 +37,8 @@ def crc32_u64(a: int, b: int) -> int:
     a = crc32_u32(a, b >> 32)
     return a
 
-imports = []
+import_crcs = []
+import_offsets = []
 crcs = set()
 for name in re.findall(r"DEF_IMPORT\(([\s\S]*?)\)", s):
     if name == "name":
@@ -46,8 +47,8 @@ for name in re.findall(r"DEF_IMPORT\(([\s\S]*?)\)", s):
     name_crc = crc32_u64(len(name), prefix) & 0xffff
     assert name_crc not in crcs, f"name collision for {name}"
     crcs.add(name_crc)
-    imports.append(str(name_crc))
-    imports.append(f"{name} - base_sym")
+    import_crcs.append(str(name_crc))
+    import_offsets.append(f"{name} - base_sym")
 
 code = ""
 
@@ -55,13 +56,14 @@ code += "extern unsigned short handlers[];\n"
 code += "extern unsigned short opcode_map[];\n"
 code += "extern unsigned short imports[];\n"
 code += "extern unsigned short imports_end[];\n"
+code += f"#define N_IMPORTS {len(import_crcs)}\n"
 
 code += 'asm ("'
 code += "base_sym: "
 code += ".pushsection .rodata.tables; "
 code += "handlers: .short " + ", ".join(handlers) + "; "
 code += "opcode_map: .byte " + ", ".join(table) + "; "
-code += "imports: .short " + ", ".join(imports) + "; imports_end: "
+code += "imports: .short " + ", ".join(import_crcs + import_offsets) + "; imports_end: "
 code += ".popsection"
 code += '");\n'
 

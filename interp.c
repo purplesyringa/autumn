@@ -119,7 +119,7 @@ struct func_info {
 
 unsigned char *declared_types[1024];
 unsigned long globals[1024];
-unsigned main_funcidx;
+unsigned entry_funcidx;
 unsigned start_funcidx = -1;
 unsigned long func_table[1024];
 struct func_info funcs[4096];
@@ -791,7 +791,7 @@ DEF(fc_prefix, 0xfc) {
 
 #include "table.i"
 
-extern char base_sym;
+extern unsigned char base_sym;
 
 static void eval_instr() {
     unsigned char opcode = *p++;
@@ -1135,18 +1135,22 @@ int main(int argc, char **argv, char **envp) {
                 unsigned long crc32 = name_len;
                 asm ("crc32 %1, %0" : "+r"(crc32) : "r"(name));
 
-                void (*func)() = NULL;
-                for (unsigned short *ip = imports; ip != imports_end; ip += 2) {
-                    if (*ip == (unsigned short)crc32) {
-                        func = (void *)(&base_sym + ip[1]);
-                        break;
-                    }
+                unsigned char *func = NULL;
+                unsigned short *ptr = imports;
+                unsigned long count = N_IMPORTS;
+                _Bool found;
+                asm (
+                    "repne scasw"
+                    : "+D"(ptr), "+c"(count), "=@cce"(found)
+                    : "a"((short)crc32)
+                );
+                if (found) {
+                    func = &base_sym + *(ptr - 1 + N_IMPORTS);
                 }
 
-                funcs[n_funcs++] = (struct func_info){
-                    .func = (unsigned char*)func,
-                    .typeidx = -1U,
-                };
+                struct func_info *func_info = &funcs[n_funcs++];
+                func_info->func = func;
+                func_info->typeidx = -1U;
 
                 p += name_len;
                 p++; // 0x00
@@ -1196,7 +1200,7 @@ int main(int argc, char **argv, char **envp) {
                 p++; // exportdesc variant
                 unsigned index = read_uint(); // exportdesc index
                 if (is_start) {
-                    main_funcidx = index;
+                    entry_funcidx = index;
                 }
             }
         } else if (section_type == 8) {
@@ -1252,7 +1256,7 @@ int main(int argc, char **argv, char **envp) {
     if (start_funcidx != (unsigned)-1) {
         call_func(start_funcidx);
     }
-    call_func(main_funcidx);
+    call_func(entry_funcidx);
 }
 
 asm (

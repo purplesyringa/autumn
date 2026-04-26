@@ -2502,3 +2502,11 @@ This leaves `EBADF`, `EIO`, and `EPIPE`. 2937 bytes after a ton of inlining and 
 ---
 
 The same optimization should be applicable to mapping results in `poll_oneoff`. But somehow I'm only at 2917 bytes. Huh. What's the reason for such a large difference in effect? Not sure -- probably because GCC didn't hard-code addresses this time. I'm rolling back the optimization, it complicated code for no good reason. `poll_oneoff` will have to stay as-is.
+
+---
+
+`call_func` could be slightly optimized if the stack grew in the opposite direction. But then the `memcpy` in `block_like` would break. So likely not worth doing.
+
+`main` looks reasonably optimized, with the exception of imports -- I can apply the same optimization to it that I applied to `errno`s way earlier. The hash and the offset are currently interleaved, but swapping them should be an improvement.
+
+2905 bytes.
