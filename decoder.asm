@@ -1,5 +1,5 @@
-    start equ 0x400000
-    output_stream equ 0x2401000
+    start equ 0x1fff000
+    output_stream equ 0x4000000
 
     bits 64
     org start

@@ -1,7 +1,7 @@
 import sys
 import struct
 
-BASE = 0x2401000
+BASE = 0x4000000
 code = bytearray(sys.stdin.buffer.read())
 
 pos = code.find(0xe8, 21) + 1
