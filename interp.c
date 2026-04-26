@@ -180,7 +180,7 @@ DEF(block_like, 0x02 /* block */, 0x03 /* loop */, 0x04 /* if */) {
         n_params = 0;
         n_results = *p++ != 0x40; // epsilon blocktype
     } else { // s32
-        unsigned typeidx = read_uint();
+        unsigned long typeidx = read_uint();
         unsigned char *saved_p = p;
         p = declared_types[typeidx];
         n_params = read_uint();
@@ -275,16 +275,16 @@ DEF(select, 0x1b) {
 }
 
 DEF(get, 0x20 /* local.get */, 0x23 /* global.get */) {
-    unsigned idx = read_uint();
+    unsigned long idx = read_uint();
     PARSED;
     push((opcode == 0x23 ? globals : locals)[idx]);
 }
 
-DEF(set_like, 0x21 = 1 /* local.set */, 0x22 = 0 /* local.tee */, 0x24 = 1 /* global.set */) {
-    unsigned idx = read_uint();
+DEF(set_like, 0x21 = 8 /* local.set */, 0x22 = 0 /* local.tee */, 0x24 = 8 /* global.set */) {
+    unsigned long idx = read_uint();
     PARSED;
     (opcode == 0x24 ? globals : locals)[idx] = *stack_head;
-    stack_head += arg;
+    asm ("add %1, %0" : "+r"(stack_head) : "r"((unsigned long)arg) : "flags");
 }
 
 DEF(
@@ -305,9 +305,9 @@ DEF(
     0x35 = 32, // i64.load32_u
 ) {
     read_uint(); // align
-    unsigned offset = read_uint();
+    unsigned long offset = read_uint();
     PARSED;
-    unsigned address = offset + *stack_head;
+    unsigned long address = offset + *stack_head;
 
     unsigned long value;
     __builtin_memcpy(&value, memory + address, 8);
@@ -338,10 +338,10 @@ DEF(
     0x3e = 4, // i64.store32
 ) {
     read_uint(); // align
-    unsigned offset = read_uint();
+    unsigned long offset = read_uint();
     PARSED;
     unsigned long *value = stack_head++;
-    unsigned address = offset + *stack_head++;
+    unsigned long address = offset + *stack_head++;
     memcpy(memory + address, value, arg);
 }
 

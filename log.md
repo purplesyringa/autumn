@@ -2473,3 +2473,13 @@ Let's focus on something different. I don't like the manual 64-bit conversion. `
 Unsigned integer handling would be so much easier if there was a `u65`-like type that supported conversion from floats. Unfortunately, that doesn't seem to exist. x87 `long double` *kind of* is like that -- it has 64 mantissa bits, including hidden bit, plus a sign bit -- but it can'be converted into a fixed-point integer easily.
 
 Let me improve something minor just so that I feel progress: I can handle `NaN` by forwarding to `maxsd` with a `0` constant even for signed integers from `jp`. That should save one `xor`. 2986 bytes.
+
+---
+
+I tried to replace the manual high-OOB handling with `minsd`, and it saved plenty of bytes, but it's incorrect due to rounding. But if I used `f80`, it'd work fine. Perhaps I should try that and see if it's an improvement.
+
+On a second thought, that's probably a bad idea. x87 doesn't support anything like `fmin`, so pretty much everything would have to be more complex. :(
+
+I took a look at `float_minmax` as well, but also didn't find any obvious optimization.
+
+Okay, let me try something else I've been meaning to do then. `read_uint` returns `unsigned long`, which I often cast to `unsigned` and then use as an index, forcing GCC to insert a zero-extension. What if I just keep using `unsigned long`? That optimizes it a little, to 2983 bytes.
