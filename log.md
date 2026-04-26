@@ -2483,3 +2483,14 @@ On a second thought, that's probably a bad idea. x87 doesn't support anything li
 I took a look at `float_minmax` as well, but also didn't find any obvious optimization.
 
 Okay, let me try something else I've been meaning to do then. `read_uint` returns `unsigned long`, which I often cast to `unsigned` and then use as an index, forcing GCC to insert a zero-extension. What if I just keep using `unsigned long`? That optimizes it a little, to 2983 bytes.
+
+---
+
+Okay, let's touch up on syscalls. We support many `errno`s currently, but they're only used for fd operations and random. The latter doesn't need it at all. For the former:
+
+- `EAGAIN` shouldn't arise.
+- `EINTR` should be retried automatically.
+- `EISDIR` and `EPERM` shouldn't happen on `stdio`.
+- `EDQUOT`, `EFBIG`, and `ENOSPC` all fall under PEBCAK.
+
+This leaves `EBADF`, `EIO`, and `EPIPE`. 2937 bytes after a ton of inlining and hard-coding. Fun how I saved a total of, like, 20 bytes from all the previous optimizations, and now about 50 almost for free.

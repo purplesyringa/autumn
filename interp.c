@@ -850,35 +850,6 @@ static void call_func(unsigned funcidx) {
     stack_head = new_stack_head;
 }
 
-#define N_ERRNOS 10
-static char errno_map[N_ERRNOS * 2] = {
-    (char)-EAGAIN, (char)-EINTR, (char)-EBADF, (char)-EIO,
-    (char)-EISDIR, (char)-EDQUOT, (char)-EFBIG, (char)-ENOSPC,
-    (char)-EPIPE, (char)-EPERM,
-    6, 27, 8, 29, 31, 19, 22, 51, 64, 63,
-};
-
-__attribute__((noinline))
-static unsigned long map_to_errno(long out) {
-    if (out >= 0) {
-        return 0;
-    }
-    if ((short)out >= -255) {
-        char *ptr = errno_map;
-        unsigned long count = N_ERRNOS;
-        _Bool found;
-        asm (
-            "repne scasb"
-            : "+D"(ptr), "+c"(count), "=@cce"(found)
-            : "a"((unsigned char)out)
-        );
-        if (found) {
-            return *(ptr - 1 + N_ERRNOS);
-        }
-    }
-    return 28; // EINVAL
-}
-
 #define DEF_IMPORT(name) void name() // deliberately not `static` to allow asm to reference this
 
 static void fd_op(int syscallno) {
@@ -901,11 +872,17 @@ static void fd_op(int syscallno) {
     }
     ssize_t native_out = syscall3(syscallno, fd, (long)native_iovs, iovs_len);
 
-    unsigned long wasi_out = map_to_errno(native_out);
+    unsigned wasi_out = 0;
     if (native_out >= 0) {
         *(int*)(memory + n_processed) = native_out;
+    } else {
+        switch ((short)native_out) {
+        case -EBADF: wasi_out = 8; break;
+        case -EIO: wasi_out = 29; break; 
+        case -EPIPE: wasi_out = 64; break;
+        default: wasi_out = 28; // EINVAL
+        }
     }
-
     *stack_head = wasi_out;
 }
 
@@ -1063,7 +1040,7 @@ DEF_IMPORT(random_get) {
         buf_len -= native_out;
         buf += native_out;
     } while (native_out > 0);
-    *stack_head = map_to_errno(native_out);
+    *stack_head = 0;
 }
 
 static char **environ, **args;
