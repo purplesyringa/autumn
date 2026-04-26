@@ -265,11 +265,6 @@ DEF(call_indirect, 0x11) {
     call_func(func_table[tableidx]);
 }
 
-DEF(drop, 0x1a) {
-    PARSED;
-    stack_head++;
-}
-
 DEF(select, 0x1b) {
     PARSED;
     unsigned long cond = *stack_head++;
@@ -279,29 +274,17 @@ DEF(select, 0x1b) {
     }
 }
 
-DEF(local_get, 0x20) {
-    unsigned localidx = read_uint();
+DEF(get, 0x20 /* local.get */, 0x23 /* global.get */) {
+    unsigned idx = read_uint();
     PARSED;
-    push(locals[localidx]);
+    push((opcode == 0x23 ? globals : locals)[idx]);
 }
 
-DEF(local_set_like, 0x21 = 1 /* local.set */, 0x22 = 0 /* local.tee */) {
-    unsigned localidx = read_uint();
+DEF(set_like, 0x21 = 1 /* local.set */, 0x22 = 0 /* local.tee */, 0x24 = 1 /* global.set */) {
+    unsigned idx = read_uint();
     PARSED;
-    locals[localidx] = *stack_head;
+    (opcode == 0x24 ? globals : locals)[idx] = *stack_head;
     stack_head += arg;
-}
-
-DEF(global_get, 0x23) {
-    unsigned globalidx = read_uint();
-    PARSED;
-    push(globals[globalidx]);
-}
-
-DEF(global_set, 0x24) {
-    unsigned globalidx = read_uint();
-    PARSED;
-    globals[globalidx] = *stack_head++;
 }
 
 DEF(
@@ -410,8 +393,10 @@ DEF(
     0x7b = unop_popcnt - unop_handlers, // i64.popcnt
     0x8b = unop_abs - unop_handlers + 1, // f32.abs
     0x8c = unop_neg - unop_handlers + 1, // f32.neg
+    0x91 = unop_sqrt - unop_handlers + 1, // f32.sqrt
     0x99 = unop_abs - unop_handlers, // f64.abs
     0x9a = unop_neg - unop_handlers, // f64.neg
+    0x9f = unop_sqrt - unop_handlers, // f64.sqrt
     0xa7 = unop_trunc - unop_handlers, // i32.wrap_i64
     0xac = unop_sxt32 - unop_handlers, // i64.extend_i32_s
     0xad = unop_trunc - unop_handlers, // i64.extend_i32_u
@@ -438,6 +423,7 @@ DEF(
         "unop_popcnt: popcnt %0, %0; ret;"
         "unop_abs: btr $63, %0; ret;"
         "unop_neg: btc $63, %0; ret;"
+        "unop_sqrt: sqrtpd %1, %1; movq %1, %0; ret;"
         "unop_trunc: mov %k0, %k0; ret;"
         "unop_sxt32: movsx %k0, %0; ret;"
         "unop_dtof: cvtpd2ps %1, %1; movq %1, %0; ret;"
@@ -523,6 +509,7 @@ DEF(
 
 DEF(
     int_binop,
+    0x1a = binop_drop - binop_handlers, // drop
     0x6a = binop_add - binop_handlers + 1, // i32.add
     0x6b = binop_sub - binop_handlers + 1, // i32.sub
     0x6c = binop_mul - binop_handlers + 1, // i32.mul
@@ -565,6 +552,7 @@ DEF(
         "call *%[handler];"
         ".pushsection .text.op;"
         "binop_handlers:"
+        "binop_drop: ret;"
         "binop_add: add %[b], %[a]; ret;"
         "binop_sub: sub %[b], %[a]; ret;"
         "binop_mul: imul %[b], %[a]; ret;"
@@ -613,18 +601,6 @@ DEF(
         : "=x"(*stack_head)
         : "r"(stack_head), [size_byte]"r"(size_byte), [mode]"r"(arg)
         : "memory"
-    );
-}
-
-DEF(sqrt, 0x91 = 0 /* f32.sqrt */, 0x9f = 1 /* f64.sqrt */) {
-    PARSED;
-    asm (
-        "test %1, %1;"
-        "je 1f + 1;"
-        "1: sqrtpd %0, %0"
-        : "+x"(*stack_head)
-        : "r"(arg)
-        : "flags"
     );
 }
 
@@ -1135,7 +1111,7 @@ int main(int argc, char **argv, char **envp) {
     int fd = syscall2(SYS_open, (long)argv[1], O_RDONLY);
     int len = syscall3(SYS_read, fd, (long)module_bytes, sizeof(module_bytes));
 
-    stack_head = stack + sizeof(stack) / sizeof(stack[0]);
+    stack_head = stack + sizeof(stack) / sizeof(stack[0]) - 1;
 
     p = module_bytes + 8;
     while (p != module_bytes + len) {

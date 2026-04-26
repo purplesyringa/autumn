@@ -2437,3 +2437,15 @@ A similar approach is applicable to rounding. Not to `sqrt`: `sqrtsd`/`sqrtss` o
 `copysign` is not really floating-point, and so it can't be optimized that way, but I do wonder if making it an integer binary operation will work?
 
 Yup! 3000 bytes. I can't use variable-width shifts because `cl` is taken, but it seems like it's fine anyway.
+
+---
+
+On the same note: how many more ops can we merge?
+
+`global.get` and `local.get` are similar, same for `set`. `drop` is *kind of* a binop that doesn't modify `a`?
+
+`sqrt` is an unary operation, and while it requires an `xmm` register, it can be treated as an integer unop the same way `dtof` is treated.
+
+`float_compare` and `round` are kinda similar: both patch two bytes in the instruction, where one comes from `arg` and the other is the size byte. But there's so many small differences that it's probably not worthwhile to merge them.
+
+2989 bytes from all the merging.
