@@ -553,6 +553,8 @@ DEF(
     0x88 = binop_shr_u - binop_handlers, // i64.shr_u
     0x89 = binop_rotl - binop_handlers, // i64.rotl
     0x8a = binop_rotr - binop_handlers, // i64.rotr
+    0x98 = binop_copysign32 - binop_handlers, // f32.copysign
+    0xa6 = binop_copysign64 - binop_handlers, // f64.copysign
 ) {
     PARSED;
     extern unsigned char binop_handlers;
@@ -580,6 +582,8 @@ DEF(
         "binop_shr_u: shr %b[b], %[a]; ret;"
         "binop_rotl: rol %b[b], %[a]; ret;"
         "binop_rotr: ror %b[b], %[a]; ret;"
+        "binop_copysign32: shl %k[a]; shl %k[b]; rcr %k[a]; ret;"
+        "binop_copysign64: shl %[a]; shl %[b]; rcr %[a]; ret;"
         ".popsection"
         : [a]"+a"(a), "+d"(zero) // specific register and zero for `div`
         : [b]"c"(b), [handler]"r"(&binop_handlers + arg) // specific register for shifts
@@ -676,19 +680,6 @@ DEF(
         "5:"
         : [a]"+x"(*stack_head)
         : [b]"x"(*b), [opcode]"r"(opcode), [op]"r"(arg)
-        : "flags"
-    );
-}
-
-DEF(copysign, 0x98 = 33 /* f32.copysign */, 0xa6 = 1 /* f64.copysign */) {
-    PARSED;
-    unsigned long b = *stack_head++;
-    asm (
-        "shl %[c], %[a];"
-        "shl %[c], %[b];"
-        "rcr %[c], %[a];"
-        : [a]"+r"(*stack_head), [b]"+r"(b)
-        : [c]"c"(arg)
         : "flags"
     );
 }

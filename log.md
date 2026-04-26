@@ -2431,3 +2431,9 @@ The major difference between FPU and SSE is that with FPU, you specify the float
 A similar approach is applicable to rounding. Not to `sqrt`: `sqrtsd`/`sqrtss` or `vsqrtpd`/`vsqrtps` would require a `rep` prefix instead of a precision-size override prefix, so I have to use `sqrtpd`/`sqrtps`, which requires alignment I can't guarantee. It would be *cool* if I could, but I don't think that's realistic, even if technically possible. And, again, FPU is not applicable because `sqrt` is precision-dependent.
 
 3009 bytes.
+
+---
+
+`copysign` is not really floating-point, and so it can't be optimized that way, but I do wonder if making it an integer binary operation will work?
+
+Yup! 3000 bytes. I can't use variable-width shifts because `cl` is taken, but it seems like it's fine anyway.
