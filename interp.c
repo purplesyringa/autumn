@@ -767,35 +767,26 @@ DEF(
 ) {
     PARSED;
 
-    unsigned long x = *stack_head;
+    // GCC is bad at removing copies to stack
+    long double ld;
+    asm ("fildq %1" : "=t"(ld) : "m"(*stack_head));
+    if (arg == 1) {
+        asm ("fildl %1" : "=t"(ld) : "m"(*stack_head));
+    }
+    asm ("" : "+r"(arg)); // prevent jump threading
 
-    // extend input to 64-bit
-    if (arg == 1) { // fnn.convert_i32_s
-        x = (long)(int)x;
+    if (arg == 2 && (long)*stack_head < 0) { // fnn.convert_i64_u
+        ld += 0x1p64;
     }
 
-    unsigned char size_byte = 0xf2 + (opcode < 0xb7); // f32
-
-    unsigned long out;
-    asm (
-        "mov %2, 1f(%%rip);"
-        "1: cvtsi2sd %1, %0"
-        : "=x"(out)
-        : "r"(x), "r"(size_byte)
-    );
-    if (arg == 2 && (long)x < 0) { // fnn.convert_i64_u
-        x = (x >> 1) | (x & 1);
-        asm (
-            "mov %2, 1f(%%rip);"
-            "mov %2, 2f(%%rip);"
-            "1: cvtsi2sd %1, %0;"
-            "2: addsd %0, %0"
-            : "=&x"(out)
-            : "r"(x), "r"(size_byte)
-        );
+    *stack_head = 0;
+    if (opcode < 0xb7) { // f32
+        float f = ld;
+        __builtin_memcpy(stack_head, &f, 4);
+    } else {
+        double d = ld;
+        __builtin_memcpy(stack_head, &d, 8);
     }
-
-    __builtin_memcpy(stack_head, &out, 8);
 }
 
 DEF(fc_prefix, 0xfc) {

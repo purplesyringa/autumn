@@ -2407,3 +2407,17 @@ Looks like `(float)(double)n` is not equivalent to `(float)n` due to double roun
 The worry about `+inf` was misguided, the issue is rounding for finite numbers. Why did I say LLVM agree? Probably because I ran the test on `int`, for which the cast to `double` introduces no rounding -- but now I tried it on `long` and it uses different code for the two options. Seems like I'll have to adjust the implementation.
 
 Fixed this by patching instructions between `sd` and `ss` variants for now. The conversion test now passes. I'm at 3029 bytes.
+
+---
+
+So, how do I optimize this? [This post](https://blog.m-ou.se/floats/) is a classic, but that's `u128`, and it's bulky. I don't think there's really any low-hanging fruit in `int_to_float`.
+
+`cvtsi2sd`/`cvtsi2ss` differ by a `rep` prefix rather than a precision size override prefix, and `cvtpi2pd`/`cvtpi2ps` take input in an `xmm` register, so they can't be straightforwardly used instead, since we need the input in a GPR as well -- at least not without complicating code further.
+
+Maybe I could optimize the `fnn.convert_i64_u` branch? It's currently reached if the direct conversion fails, i.e. `x < 2^63`. Assuming `x` is in-bounds, `2^63 <= x < 2^64` and thus the exponent is fixed. But rounding makes this complicated, since `x = 2^64 - 1` should round to an exponent of `64`... It technically still works if I let the mantissa overflow into the exponent, though. But regardless, I just don't think that'll yield meaningful improvements, since we don't know if the target type is `f32` or `f64` and thus can't hard-code its layout.
+
+If I may go out on a limb: `i64 -> f80` conversion is just barely lossless, right? So what if I use the FPU to perform it, so that I only need to convert to the target precision once? *Surely* that's a good idea?
+
+I wrote `long double ld = (unsigned long)x` for accident, and GCC generated some weird code, where it converted `x` as if it was signed, and then just added a constant. Does that actually work? I mean, I'd guess so: if any `long` is exactly representable, which for `f80` it is, you can just add `2^64` if you need to.
+
+That's *so* much cleaner. 3016 bytes!
