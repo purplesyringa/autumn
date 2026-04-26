@@ -513,9 +513,10 @@ DEF(
         "mov %[size_byte], 1f + 1(%%rip);"
         "mov %[imm8], 1f + 4(%%rip);"
         "1:"
-        "vcmppd $0, %[b], %[a], %[out]"
+        "vcmppd $0, (%[b]), %[a], %[out]"
         : [out]"=x"(out)
-        : [a]"Yz"(*stack_head), [b]"x"(*b), [size_byte]"r"(size_byte), [imm8]"r"(arg)
+        : [a]"Yz"(*stack_head), [b]"r"(b), [size_byte]"r"(size_byte), [imm8]"r"(arg)
+        : "memory"
     );
     *stack_head = out & 1;
 }
@@ -604,9 +605,10 @@ DEF(
         "mov %[size_byte], 1f + 3(%%rip);"
         "mov %[mode], 1f + 5(%%rip);"
         "1:"
-        "roundsd $0, %0, %0"
-        : "+x"(*stack_head)
-        : [size_byte]"r"(size_byte), [mode]"r"(arg)
+        "vroundsd $0, (%1), %0, %0"
+        : "=x"(*stack_head)
+        : "r"(stack_head), [size_byte]"r"(size_byte), [mode]"r"(arg)
+        : "memory"
     );
 }
 

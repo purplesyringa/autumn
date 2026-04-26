@@ -2421,3 +2421,13 @@ If I may go out on a limb: `i64 -> f80` conversion is just barely lossless, righ
 I wrote `long double ld = (unsigned long)x` for accident, and GCC generated some weird code, where it converted `x` as if it was signed, and then just added a constant. Does that actually work? I mean, I'd guess so: if any `long` is exactly representable, which for `f80` it is, you can just add `2^64` if you need to.
 
 That's *so* much cleaner. 3016 bytes!
+
+---
+
+This makes me wonder if I can (ab)use the FPU anywhere else.
+
+The major difference between FPU and SSE is that with FPU, you specify the floating-point type on load/store, and with SSE, you do that when performing the operation. So it's useless in e.g. `float_compare`: with SSE, it's two untyped loads and one typed comparison, while the FPU would require two typed loads. I can fix the outstanding useless-`movq` issue, though. Worth noting that this one doesn't require the `R` constraint, only `r`, since the REX prefix is unnecessary when VEX is present.
+
+A similar approach is applicable to rounding. Not to `sqrt`: `sqrtsd`/`sqrtss` or `vsqrtpd`/`vsqrtps` would require a `rep` prefix instead of a precision-size override prefix, so I have to use `sqrtpd`/`sqrtps`, which requires alignment I can't guarantee. It would be *cool* if I could, but I don't think that's realistic, even if technically possible. And, again, FPU is not applicable because `sqrt` is precision-dependent.
+
+3009 bytes.
