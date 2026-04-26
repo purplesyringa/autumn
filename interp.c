@@ -683,9 +683,7 @@ DEF(
         x = f;
     }
 
-    unsigned long out = 0;
-    asm volatile ("" : "+r"(out)); // witness zero so that the conditional jump compiles better
-
+    unsigned long out;
     unsigned bitness = 31 + (arg & 1) + 32 * ((arg & 4) != 0);
 
     asm goto (
@@ -695,16 +693,16 @@ DEF(
         :
         : "x"(x), "x"((1023UL + bitness) << 52 /* pow2(bitness) */)
         : "flags"
-        : done, below_limit
+        : maxsd, below_limit
     );
 
     // above limit
-    out--; // generate -1
-    out >>= (64 - bitness) % 64;
+    out = -1UL >> ((64 - bitness) % 64);
     goto done;
 
 below_limit:
     if (arg & 1) { // unn
+    maxsd:
         asm ("maxsd %1, %0" : "+x"(x) : "x"(0));
     }
 

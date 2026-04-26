@@ -2449,3 +2449,27 @@ On the same note: how many more ops can we merge?
 `float_compare` and `round` are kinda similar: both patch two bytes in the instruction, where one comes from `arg` and the other is the size byte. But there's so many small differences that it's probably not worthwhile to merge them.
 
 2989 bytes from all the merging.
+
+---
+
+This leaves two floating-point ops that look larger than necessary: `float_minmax` and `float_to_int`.
+
+The current implementation in `float_to_int` does the following:
+
+- If `f32`, convert to `f64`.
+- Compare the input against the runtime-computed high boundary (`2^bitness` as float).
+- If unordered, return `0` immediately.
+- If above or equal to the limit, return `2^bitness - 1` as integer immediately.
+- If the comparison is unsigned, clamp to `0`. If it's signed, conversion will return the right output anyway.
+- Convert to `s64`, or to `s32` if the target type is `s32`.
+- If the target type should've been `u64` and conversion failed, manually convert to `u64`.
+
+Computing the high boundary is one of the most expensive steps, since the bitness needs to be calculated from the corresponding `sat` opcode, because otherwise we'd be unable to implement `sat` conversions optimally. But maybe that's too complex to tackle right now.
+
+Perhaps it'd be useful to merge the 32-bit and 64-bit paths together? With int-to-float conversion, we could just cast types at the beginning. But with saturating conversions in the reverse diversion, the bounds differ for 32-bit and 64-bit inputs. I initially thought we could keep only the 64-bit path, and for 32-bit integers, multiply the input by `2^32` and right-shift it by 32 at the end. But that *also* doesn't work: while the bounds work out, this has the wrong rounding direction due to the right-shift at the end flooring instead of truncating!
+
+Let's focus on something different. I don't like the manual 64-bit conversion. `int_to_float` uses a clever approach here, converting the input as if it's signed and then adding `2^64` if necessary. Can we subtract `2^64` from high inputs here in much the same way? Something along the lines of `if (x >= 2^63) x -= 2^64`. Does this break any bounds? It does: `2^64` should saturate to `2^64 - 1`, but instead it'll get mapped to `0`. We could do this after bounds checking, but it's unlikely to save code. Unfortunate.
+
+Unsigned integer handling would be so much easier if there was a `u65`-like type that supported conversion from floats. Unfortunately, that doesn't seem to exist. x87 `long double` *kind of* is like that -- it has 64 mantissa bits, including hidden bit, plus a sign bit -- but it can'be converted into a fixed-point integer easily.
+
+Let me improve something minor just so that I feel progress: I can handle `NaN` by forwarding to `maxsd` with a `0` constant even for signed integers from `jp`. That should save one `xor`. 2986 bytes.
