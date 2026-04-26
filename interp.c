@@ -1094,7 +1094,7 @@ int main(int argc, char **argv, char **envp) {
 
     int fd = syscall2(SYS_open, (long)argv[1], O_RDONLY);
     if (fd < 0) {
-        static const char message[] = "Usage: wasmik <path.wasm>\n";
+        static const char message[] = "Usage: autumn <path.wasm>\n";
         syscall3(SYS_write, 1, (long)message, sizeof(message) - 1);
         return 0;
     }

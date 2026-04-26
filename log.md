@@ -2516,3 +2516,7 @@ The same optimization should be applicable to mapping results in `poll_oneoff`. 
 And that's all the code-related optimizations done, I think. I considered "vectorizing" varint parsing with SWAR and things like `pext` and `tzcnt`, but looking at the current lowering, I really doubt I can get even close to it in size.
 
 Perhaps it's time to finally make the program not segfault/loop when run without arguments. I'll cheat and validate the return value from `open` for this, so that I catch invalid paths as well. I have 30 bytes for `syscall` and a message. It's 2960 bytes... I need to reduce it by 7 more bytes. I have one last trick up my sleeve that doesn't involve changing compression: change the base address to a more easily compressable value, e.g. from `0x2401000` to `0x4000000`. And that does it: 2942 bytes. It just prints `Usage: wasmik <path.wasm>`, nothing fancy, but anything more complex gets it above the limit quickly.
+
+---
+
+I was thinking about what to call this project. I don't like `wasmik`. I liked `wasmic` more, but that's taken. I'm now thinking about `winter`, for Wasm Interpreter. Except [that's also taken](https://github.com/peterseymour/winter)... It's a sad day. Maybe get meta and call it `autumn`?
