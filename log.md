@@ -1,3 +1,9 @@
+# Development log
+
+This is a log I wrote over the course of this project, covering the various ideas I've tried to apply and thought of. It's enormous and there's little structure to it, but you might find some interesting details if you can stomach 160 KiB of text.
+
+---
+
 Let's try something. I'm thinking using assembly directly isn't a good idea, since I won't be able to debug OOB accesses. So I'll get some familiarity with the binary wasm format first. I know how code looks, approximately, and the general shape of a wasm module, but I don't yet know which specific details I need to parse and which ones I can skip. So I'll make a C prototype first to learn that.
 
 I also don't know which API to use for the module yet. I'm thinking WASI 0.1 (component model is too complex for the purposes of this project) and just compile a few simple programs and see what they import.
