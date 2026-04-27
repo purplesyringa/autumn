@@ -869,7 +869,7 @@ static void fd_op(int syscallno) {
     for (unsigned i = 0; i < iovs_len; i++) {
         asm volatile (
             "lodsl;" // buf
-            "add %[memory], %%eax;"
+            "add %[memory], %%rax;"
             "stosq;"
             "lodsl;" // buf_len
             "stosq"

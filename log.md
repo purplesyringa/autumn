@@ -2526,3 +2526,7 @@ Perhaps it's time to finally make the program not segfault/loop when run without
 ---
 
 I was thinking about what to call this project. I don't like `wasmik`. I liked `wasmic` more, but that's taken. I'm now thinking about `winter`, for Wasm Interpreter. Except [that's also taken](https://github.com/peterseymour/winter)... It's a sad day. Maybe get meta and call it `autumn`?
+
+---
+
+Yuki found a bug in `fd_op`: I used a 32-bit operation to compute the address instead of a 64-bit one. Still 2942 bytes.
