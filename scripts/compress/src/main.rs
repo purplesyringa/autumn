@@ -203,7 +203,12 @@ fn try_push(model: u8, models: &mut Vec<u8>, size: &mut f64, bytes: &[u8]) {
 }
 
 fn main() {
-    let bytes = std::fs::read("../interp-small.e8.bin").unwrap();
+    let mut args = std::env::args().skip(1);
+    let src = args.next().unwrap();
+    let compressed_dst = args.next().unwrap();
+    let models_dst = args.next().unwrap();
+
+    let bytes = std::fs::read(src).unwrap();
     dbg!(bytes.len());
 
     let mut models = vec![];
@@ -216,8 +221,8 @@ fn main() {
     let model_list = models.iter().map(|i| (i << 1) | 1).collect::<Vec<_>>();
     dbg!(model_list.len());
     println!("{model_list:02x?}");
-    std::fs::write("../models.bin", model_list).unwrap();
+    std::fs::write(models_dst, model_list).unwrap();
     let (_, out) = compress_with_models(&bytes, &models, false);
     dbg!(out.len());
-    std::fs::write("../compressed.bin", out).unwrap();
+    std::fs::write(compressed_dst, out).unwrap();
 }

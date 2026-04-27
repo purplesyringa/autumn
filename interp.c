@@ -789,7 +789,7 @@ DEF(fc_prefix, 0xfc) {
     }
 }
 
-#include "table.i"
+#include "build/table.i"
 
 extern unsigned char base_sym;
 

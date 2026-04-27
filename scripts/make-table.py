@@ -67,5 +67,5 @@ code += "imports: .short " + ", ".join(import_crcs + import_offsets) + "; import
 code += ".popsection"
 code += '");\n'
 
-with open("table.i", "w") as f:
+with open("build/table.i", "w") as f:
     f.write(code)

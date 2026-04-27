@@ -149,11 +149,11 @@ teach_model:
     jmp write_bit
 
 models:
-    incbin "models.bin"
+    incbin "build/models.bin"
 models_end:
 
 input_stream:
-    incbin "compressed.bin"
+    incbin "build/compressed.bin"
 
     section .bss
 input_stream_end:
