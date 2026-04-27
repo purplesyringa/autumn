@@ -84,15 +84,14 @@ struct read_int_output {
 // direct callers must be `noinline`.
 __attribute__((noinline))
 static struct read_int_output impl_read_int() {
-    unsigned char shift = 64;
     unsigned long value = 0;
+    unsigned char shift = 0;
     unsigned char c;
     do {
         c = *p;
         p++;
-        unsigned char bits = shift < 7 ? shift : 7;
-        asm ("shrd %2, %q1, %0" : "+r"(value) : "r"(c), "c"(bits) : "flags");
-        shift -= bits;
+        value |= (unsigned long)(c & 0x7f) << shift;
+        shift += 7;
     } while (c & 0x80);
     return (struct read_int_output) {
         .value = value,
@@ -103,13 +102,17 @@ static struct read_int_output impl_read_int() {
 __attribute__((noinline))
 static unsigned long read_uint() {
     struct read_int_output out = impl_read_int();
-    return out.value >> out.shift;
+    return out.value;
 }
 
 __attribute__((noinline))
 static long read_sint() {
     struct read_int_output out = impl_read_int();
-    return (long)out.value >> out.shift;
+    if (out.shift < 64) {
+        char shift = 64 - out.shift;
+        out.value = (long)(out.value << shift) >> shift;
+    }
+    return out.value;
 }
 
 struct func_info {

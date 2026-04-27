@@ -2530,3 +2530,7 @@ I was thinking about what to call this project. I don't like `wasmik`. I liked `
 ---
 
 Yuki found a bug in `fd_op`: I used a 32-bit operation to compute the address instead of a 64-bit one. Still 2942 bytes.
+
+---
+
+Was writing the part of the article about `impl_read_int` and realized a more straightforward implementation is smaller. 2939 bytes.
