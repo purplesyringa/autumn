@@ -706,7 +706,7 @@ DEF(
 below_limit:
     if (arg & 1) { // unn
     maxsd:
-        asm ("maxsd %1, %0" : "+x"(x) : "x"(0));
+        asm ("maxsd %1, %0" : "+x"(x) : "x"(0L));
     }
 
     asm ("cvttsd2si %1, %0;" : "=r"(out) : "x"(x));
