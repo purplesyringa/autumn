@@ -90,7 +90,7 @@ skip_byte:
     jne hash
 
     ; Compute hash table entry address
-    and eax, 32 * 1024 * 1024 - 2
+    and eax, 8 * 1024 * 1024 - 2
     add eax, hash_table
 
     ; Accumulate c0/c1

@@ -19,7 +19,7 @@ impl Counter {
 #[derive(Clone)]
 struct ModelCounter {
     // masked past bytes, current in-progress byte
-    map: Box<[Counter; const { 1 << 24 }]>,
+    map: Box<[Counter; const { 1 << 22 }]>,
 }
 
 impl Default for ModelCounter {
