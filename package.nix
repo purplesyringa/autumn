@@ -42,7 +42,7 @@ stdenv.mkDerivation {
   '';
   meta = {
     description = "Tiny WASM interpreter";
-    # license = ?
+    license = lib.licenses.agpl3Only;
     platforms = ["x86_64-linux"];
     homepage = "https://github.com/purplesyringa/autumn";
     mainProgram = "autumn";
