@@ -2,7 +2,7 @@
 
 > Looking for a Wasm interpreter? Try `autumn` — it's slow, it's insecure, and it's feature-incomplete.
 
-WebAssembly interpreter that fits in a QR code, taking 2944 bytes:
+WebAssembly interpreter that fits in a QR code, taking 2945 bytes:
 
 ![QR code](autumn.png)
 

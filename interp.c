@@ -30,7 +30,7 @@ static void *memmove(void *dst, const void *src, size_t n) {
     void *tmp = dst;
     asm volatile (
         "cmp %0, %1;"
-        "jb 1f;" // src < dst
+        "jae 1f;" // src >= dst
         "add %2, %0;"
         "dec %0;"
         "add %2, %1;"
