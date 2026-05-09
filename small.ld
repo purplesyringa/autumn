@@ -8,7 +8,7 @@ SECTIONS {
         *(.text .text.*)
         *(.data .data.* .rodata .rodata.*)
     }
-    .bss : {
+    .bss (NOLOAD) : {
         *(.bss .bss.*) *(COMMON)
     }
     /DISCARD/ : {
